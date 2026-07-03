@@ -29,7 +29,7 @@ from .protocol_context import (
     resolve_protocol_revision,
 )
 from .handlers.registry import get_registered_handlers
-from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject, make_result
+from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject
 
 # Side-effect imports register built-in handlers.
 from .handlers import completions as _completions  # noqa: F401
