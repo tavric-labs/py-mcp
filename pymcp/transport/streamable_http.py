@@ -11,7 +11,8 @@ from uuid import uuid4
 from fastapi import APIRouter, Request
 from fastapi.responses import JSONResponse, Response, StreamingResponse
 
-from ..runtime.dispatch import process_jsonrpc_message
+from ..protocol.errors import build_error_response
+from ..runtime.dispatch import process_jsonrpc_message, process_stateless_jsonrpc_message
 from ..runtime.payloads import (
     FORBIDDEN,
     INVALID_PARAMS,
@@ -24,9 +25,15 @@ from ..observability.logging import get_logger
 from ..session import get_session_store
 from ..session.queueing import log_client_follow_up_request
 from ..session.types import Session
-from ..settings import SUPPORTED_PROTOCOL_VERSIONS
 from .http_common import accept_contains, get_mcp_session_id, try_parse_json_body
+from .http_validation import (
+    looks_like_stateless_request,
+    request_body_protocol_version,
+    validate_stateless_http_metadata,
+)
 from .shutdown import ensure_shutdown_event, wait_queue_message
+from .subscriptions import format_sse as _format_sse
+from .subscriptions import stream_stateless_subscription
 
 
 router = APIRouter()
@@ -57,8 +64,10 @@ def _is_loopback_origin(origin: str) -> bool:
     return hostname in {"localhost", "127.0.0.1", "::1"}
 
 
-def _jsonrpc_http_error(status_code: int, code: int, message: str) -> JSONResponse:
-    return JSONResponse(status_code=status_code, content=error_response(None, code, message))
+def _jsonrpc_http_error(status_code: int, code: int, message: str, *, data=None, rpc_id=None) -> JSONResponse:
+    if data is not None:
+        return JSONResponse(status_code=status_code, content=build_error_response(rpc_id, code, message, data))
+    return JSONResponse(status_code=status_code, content=error_response(rpc_id, code, message))
 
 
 def _reject_invalid_origin(request: Request) -> Response | None:
@@ -68,18 +77,8 @@ def _reject_invalid_origin(request: Request) -> Response | None:
     return _jsonrpc_http_error(403, FORBIDDEN, f"Forbidden origin: {origin}")
 
 
-def _reject_invalid_protocol_version(request: Request) -> Response | None:
-    version = request.headers.get("MCP-Protocol-Version")
-    if not version:
-        return None
-    if version in SUPPORTED_PROTOCOL_VERSIONS:
-        return None
-    supported = ", ".join(SUPPORTED_PROTOCOL_VERSIONS)
-    return _jsonrpc_http_error(
-        400,
-        INVALID_PARAMS,
-        f"Unsupported MCP-Protocol-Version '{version}'. Supported: {supported}",
-    )
+def _protocol_log_tag(protocol_version: str | None) -> str:
+    return f"[protocol={protocol_version or 'unknown'}]"
 
 
 def _stream_headers() -> dict[str, str]:
@@ -96,7 +95,13 @@ def _post_headers(request: Request, session_id: str) -> dict[str, str]:
     return {"MCP-Session-Id": session_id}
 
 
-def _log_jsonrpc_start(data: dict, session_id: str, session: Session | None = None) -> None:
+def _log_jsonrpc_start(
+    data: dict,
+    session_id: str,
+    session: Session | None = None,
+    *,
+    protocol_version: str | None = None,
+) -> None:
     method = data.get("method")
     method_name = method if isinstance(method, str) else "<unknown>"
     if session is not None and method_name != "<unknown>":
@@ -111,12 +116,14 @@ def _log_jsonrpc_start(data: dict, session_id: str, session: Session | None = No
             session_id,
         )
     logger.info(
-        "[HTTP][MCP] client -> server request received method=%s session=%s",
+        "[HTTP][MCP]%s client -> server request received method=%s session=%s",
+        _protocol_log_tag(protocol_version),
         method_name,
         session_id,
     )
     logger.debug(
-        "[HTTP][MCP] client -> server request body method=%s session=%s body=%s",
+        "[HTTP][MCP]%s client -> server request body method=%s session=%s body=%s",
+        _protocol_log_tag(protocol_version),
         method_name,
         session_id,
         data,
@@ -128,6 +135,8 @@ def _log_jsonrpc_complete(
     status: int,
     payload: dict | None,
     session_id: str,
+    *,
+    protocol_version: str | None = None,
 ) -> None:
     if method_name == "notifications/initialized" and status == 202:
         logger.info(
@@ -136,13 +145,15 @@ def _log_jsonrpc_complete(
         )
     else:
         logger.info(
-            "[HTTP][MCP] server -> client response sent method=%s status=%s session=%s",
+            "[HTTP][MCP]%s server -> client response sent method=%s status=%s session=%s",
+            _protocol_log_tag(protocol_version),
             method_name,
             status,
             session_id,
         )
         logger.debug(
-            "[HTTP][MCP] server -> client response body method=%s session=%s body=%s",
+            "[HTTP][MCP]%s server -> client response body method=%s session=%s body=%s",
+            _protocol_log_tag(protocol_version),
             method_name,
             session_id,
             payload,
@@ -181,17 +192,6 @@ def _apply_session_principal(session, request_principal) -> Response | None:
     if session.principal != request_principal:
         return _jsonrpc_http_error(403, FORBIDDEN, "Session principal mismatch")
     return None
-
-
-def _format_sse(data: str, *, event: str | None = None, event_id: str | None = None) -> str:
-    lines: list[str] = []
-    if event_id:
-        lines.append(f"id: {event_id}")
-    if event:
-        lines.append(f"event: {event}")
-    for chunk in data.splitlines() or [""]:
-        lines.append(f"data: {chunk}")
-    return "\n".join(lines) + "\n\n"
 
 
 @router.get("/.well-known/oauth-protected-resource")
@@ -274,7 +274,7 @@ async def _stream_session_events(
 
 @router.get("/mcp")
 async def mcp_stream(request: Request) -> Response:
-    rejected = _reject_invalid_origin(request) or _reject_invalid_protocol_version(request)
+    rejected = _reject_invalid_origin(request)
     if rejected:
         return rejected
     if not accept_contains(request, "text/event-stream"):
@@ -317,7 +317,7 @@ async def mcp_stream(request: Request) -> Response:
 
 @router.post("/mcp")
 async def mcp_post(request: Request) -> Response:
-    rejected = _reject_invalid_origin(request) or _reject_invalid_protocol_version(request)
+    rejected = _reject_invalid_origin(request)
     if rejected:
         return rejected
     if not (
@@ -338,14 +338,28 @@ async def mcp_post(request: Request) -> Response:
     if not isinstance(body, dict):
         return _jsonrpc_http_error(400, INVALID_REQUEST, "Invalid JSON-RPC request")
     data = body
-
+    body_protocol_version = request_body_protocol_version(data)
     session_manager = get_session_store(request.app)
     session_id = get_mcp_session_id(request)
+    stateless_request = looks_like_stateless_request(data, request, session_id)
+    if stateless_request:
+        validation_error = validate_stateless_http_metadata(request, data)
+        if validation_error:
+            return _jsonrpc_http_error(
+                validation_error.status_code,
+                validation_error.code,
+                validation_error.message,
+                data=validation_error.data,
+                rpc_id=validation_error.rpc_id,
+            )
     method = data.get("method")
     method_name = method if isinstance(method, str) else None
     request_principal = getattr(request.state, "principal", None)
 
-    if not session_id:
+    if stateless_request:
+        session = None
+        session_id = "stateless"
+    elif not session_id:
         if method_name != "initialize":
             return _jsonrpc_http_error(400, INVALID_PARAMS, "MCP-Session-Id header required")
         session = session_manager.create_session()
@@ -362,25 +376,47 @@ async def mcp_post(request: Request) -> Response:
             if principal_error is not None:
                 return principal_error
 
-    _log_jsonrpc_start(data, session_id, session)
+    if body_protocol_version is None and method_name == "initialize":
+        params = data.get("params")
+        params_dict = params if isinstance(params, dict) else {}
+        requested = params_dict.get("protocolVersion")
+        body_protocol_version = requested if isinstance(requested, str) else None
+
+    _log_jsonrpc_start(data, session_id, session, protocol_version=body_protocol_version)
+
+    if stateless_request and method_name == "subscriptions/listen":
+        return StreamingResponse(
+            stream_stateless_subscription(request, data),
+            media_type="text/event-stream",
+            headers=_stream_headers(),
+        )
 
     if method_name is None:
         rpc_id = data.get("id")
         if isinstance(rpc_id, str):
             session_manager.resolve_pending_response(session_id, rpc_id, data)
         headers = _post_headers(request, session_id)
-        _schedule_connection_complete(request, session_id)
+        if not stateless_request:
+            _schedule_connection_complete(request, session_id)
         return Response(status_code=202, headers=headers)
 
-    result = await process_jsonrpc_message(
-        session_id,
-        data,
-        app=request.app,
-        direct_response=True,
-    )
-    _log_jsonrpc_complete(method_name, result.status, result.payload, session_id)
-    _schedule_connection_complete(request, session_id)
-    headers = _post_headers(request, session_id)
+    if stateless_request:
+        result = await process_stateless_jsonrpc_message(
+            data,
+            app=request.app,
+            direct_response=True,
+        )
+    else:
+        result = await process_jsonrpc_message(
+            session_id,
+            data,
+            app=request.app,
+            direct_response=True,
+        )
+    _log_jsonrpc_complete(method_name, result.status, result.payload, session_id, protocol_version=body_protocol_version)
+    if not stateless_request:
+        _schedule_connection_complete(request, session_id)
+    headers = {} if stateless_request else _post_headers(request, session_id)
     if result.payload is None:
         return Response(status_code=result.status, headers=headers)
     return JSONResponse(status_code=result.status, content=result.payload, headers=headers)
@@ -388,7 +424,7 @@ async def mcp_post(request: Request) -> Response:
 
 @router.delete("/mcp")
 async def mcp_delete(request: Request) -> Response:
-    rejected = _reject_invalid_origin(request) or _reject_invalid_protocol_version(request)
+    rejected = _reject_invalid_origin(request)
     if rejected:
         return rejected
 

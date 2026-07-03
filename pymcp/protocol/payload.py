@@ -17,6 +17,7 @@ from .errors import MCPErrorCode
 from .json_types import JSONValue, JSONObject, RPCId
 from .jsonrpc import build_error_envelope, build_result_envelope
 from .meta import attach_meta
+from .revisions import LATEST_DRAFT_PROTOCOL_VERSION, get_protocol_revision
 
 
 SUPPORTED_PROTOCOL_VERSIONS: Final[tuple[str, ...]] = SERVER_SUPPORTED_PROTOCOL_VERSIONS
@@ -231,8 +232,34 @@ class PayloadFactory:
         return ServerSettings()
 
 
+class PayloadFactory_2026_07_28(PayloadFactory):
+    """Payload builder for MCP protocol revision 2026-07-28."""
+
+    _CACHEABLE_KEYS = frozenset(
+        {
+            "contents",
+            "prompts",
+            "resourceTemplates",
+            "resources",
+            "supportedVersions",
+            "tools",
+        }
+    )
+
+    def success(self, rpc_id: RPCId, result: JSONObject) -> JSONObject:
+        modern = dict(result)
+        modern.setdefault("resultType", "complete")
+        if any(key in modern for key in self._CACHEABLE_KEYS):
+            modern.setdefault("ttlMs", 0)
+            modern.setdefault("cacheScope", "private")
+        return success(rpc_id, modern)
+
+
 _FACTORY_BY_PROTOCOL_VERSION: Final[Mapping[str, type[PayloadFactory]]] = MappingProxyType(
-    {version: PayloadFactory for version in SUPPORTED_PROTOCOL_VERSIONS}
+    {
+        **{version: PayloadFactory for version in SUPPORTED_PROTOCOL_VERSIONS},
+        LATEST_DRAFT_PROTOCOL_VERSION: PayloadFactory_2026_07_28,
+    }
 )
 
 
@@ -245,12 +272,17 @@ def get_payload_factory(protocol_version: str | None, *, app: FastAPI | None = N
     version, error_message = negotiate_protocol_version(protocol_version, settings)
     if version is None:
         raise ValueError(error_message or "Unsupported protocolVersion")
-    factory_cls = _FACTORY_BY_PROTOCOL_VERSION.get(version, PayloadFactory)
+    revision = get_protocol_revision(version)
+    factory_cls = _FACTORY_BY_PROTOCOL_VERSION.get(
+        version,
+        PayloadFactory_2026_07_28 if revision is not None and revision.stateless else PayloadFactory,
+    )
     return factory_cls(protocol_version=version, app=app)
 
 
 __all__ = [
     "DEFAULT_PROTOCOL_VERSION",
+    "PayloadFactory_2026_07_28",
     "PayloadFactory",
     "SUPPORTED_PROTOCOL_VERSIONS",
     "error",

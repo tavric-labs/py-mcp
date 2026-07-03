@@ -10,7 +10,9 @@ from typing import TextIO
 
 from fastapi import FastAPI
 
-from ..runtime.dispatch import process_jsonrpc_message
+from ..protocol.metadata import extract_request_metadata
+from ..protocol.revisions import get_protocol_revision
+from ..runtime.dispatch import process_jsonrpc_message, process_stateless_jsonrpc_message
 from ..runtime.payloads import INVALID_REQUEST, PARSE_ERROR, error_response
 from ..session import get_session_manager
 
@@ -44,6 +46,16 @@ class StdioTransport:
         return self._session_id
 
     async def handle_payload(self, app: FastAPI, payload: dict[str, object]) -> dict[str, object] | None:
+        request_metadata = extract_request_metadata(payload)
+        revision = get_protocol_revision(request_metadata.protocol_version) if request_metadata is not None else None
+        if revision is not None and revision.stateless:
+            result = await process_stateless_jsonrpc_message(
+                payload,
+                app=app,
+                direct_response=True,
+            )
+            return result.payload
+
         session_id = self._ensure_session(app)
         if "method" not in payload:
             rpc_id = payload.get("id")

@@ -258,6 +258,31 @@ async def test_tasks_bind_to_authorization_context_instead_of_session_id():
     assert same_principal_result.payload["result"]["structuredContent"] == {"ok": True}
 
 
+async def test_tasks_update_acknowledges_input_responses_for_active_task():
+    app = create_app(middleware_config=None)
+    manager = get_session_manager(app)
+    session = manager.create_session()
+    await _initialize_ready(app, session.session_id)
+
+    task = await app.state.task_manager.create_task(session.session_id)
+    update_response = await process_jsonrpc_message(
+        session.session_id,
+        {
+            "jsonrpc": "2.0",
+            "id": 2,
+            "method": "tasks/update",
+            "params": {
+                "taskId": task.task_id,
+                "inputResponses": {"approval": {"approved": True}},
+            },
+        },
+        app=app,
+        direct_response=True,
+    )
+
+    assert update_response.payload["result"] == {}
+
+
 async def test_tool_results_preserve_rich_payloads_for_direct_and_task_calls():
     @tool_registry.register(name="rich_payload_tool", execution={"taskSupport": "optional"})
     def rich_payload_tool() -> dict[str, object]:
