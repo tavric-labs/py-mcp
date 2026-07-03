@@ -21,6 +21,79 @@ ServerSettings(protocol_mode="dual")   # draft plus stable versions
 `ServerSettings(protocol_versions=(...))` can be used as an explicit override
 for compatibility testing.
 
+## Draft Stateless Request Flow
+
+Draft `2026-07-28` requests skip `initialize`/sessions entirely. Every request
+carries its own protocol version, client info, and client capabilities in
+`params._meta`, and is validated against matching HTTP headers before
+dispatch:
+
+```
+Client                                   HTTP Transport                              Dispatcher                          Handler
+  |                                            |                                           |                                  |
+  | POST /mcp                                  |                                           |                                  |
+  | headers: MCP-Protocol-Version,             |                                           |                                  |
+  |          Mcp-Method, [Mcp-Name]            |                                           |                                  |
+  | body:    params._meta = {                  |                                           |                                  |
+  |            protocolVersion,                |                                           |                                  |
+  |            clientInfo,                     |                                           |                                  |
+  |            clientCapabilities }            |                                           |                                  |
+  |------------------------------------------->|                                           |                                  |
+  |                                  [origin check]                                        |                                  |
+  |                                  request_body_protocol_version(data)                   |                                  |
+  |                                  looks_like_stateless_request() -> True                |                                  |
+  |                                  validate_stateless_http_metadata()                    |                                  |
+  |                                    - MCP-Protocol-Version present & == body._meta       |                                  |
+  |                                    - version in ServerSettings.protocol_versions        |                                  |
+  |                                    - Mcp-Method present & == body.method                |                                  |
+  |                                    - Mcp-Name required/matched for                      |                                  |
+  |                                      tools/call | resources/read | prompts/get          |                                  |
+  |                                    (any failure -> HEADER_MISMATCH /                    |                                  |
+  |                                     UNSUPPORTED_PROTOCOL_VERSION, HTTP error)            |                                  |
+  |                                            |                                           |                                  |
+  |                        [subscriptions/listen] --> stream_stateless_subscription (SSE)   |                                  |
+  |                                            |                                           |                                  |
+  |                                  process_stateless_jsonrpc_message(data)                |                                  |
+  |                                            |------------------------------------------>|                                  |
+  |                                            |                            require_request_metadata(data)                   |
+  |                                            |                              -> RequestMetadata(protocol_version,            |
+  |                                            |                                 client_info, client_capabilities)            |
+  |                                            |                            resolve_protocol_revision(version, settings)      |
+  |                                            |                              -> ProtocolRevision (must be stateless)         |
+  |                                            |                            build_stateless_dispatch_context(...)             |
+  |                                            |                              -> DispatchContext (transient session,          |
+  |                                            |                                 protocol_revision, request_metadata)         |
+  |                                            |                            middleware pipeline:                             |
+  |                                            |                              ErrorBoundary                                  |
+  |                                            |                              -> InitGateMiddleware (bypassed, stateless)     |
+  |                                            |                              -> RevisionMethodGateMiddleware                 |
+  |                                            |                                 (blocks initialize/ping/subscribe/etc.,      |
+  |                                            |                                  blocks server/discover if unsupported)      |
+  |                                            |                              -> CapabilityGateMiddleware                     |
+  |                                            |                              -> AuthorizationGateMiddleware                  |
+  |                                            |                              -> call_next -----------------------------------|
+  |                                            |                                                                              |
+  |                                            |                                                             rpc_method handler runs
+  |                                            |                                                             (e.g. server/discover,
+  |                                            |                                                              tools/list, tasks/update)
+  |                                            |                                                             ctx.payloads() ->
+  |                                            |                                                             PayloadFactory_2026_07_28:
+  |                                            |                                                               resultType="complete"
+  |                                            |                                                               ttlMs=0,
+  |                                            |                                                               cacheScope="private"
+  |                                            |                            <-----------------------------------------------|
+  |                                            |<-------------------------------------------                                 |
+  |<-------------------------------------------|                                                                              |
+  | 200 OK, no MCP-Session-Id header           |                                                                              |
+  | body: { result: {..., resultType,          |                                                                              |
+  |         ttlMs, cacheScope} }               |                                                                              |
+```
+
+Errors short-circuit at the HTTP layer (`HEADER_MISMATCH`,
+`UNSUPPORTED_PROTOCOL_VERSION`) before ever reaching the dispatcher, and
+`RequestMetadataError` short-circuits inside `dispatch_stateless` for
+malformed or missing `_meta` fields.
+
 ## Conformance
 
 `pymcp-kit` passes the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance)
