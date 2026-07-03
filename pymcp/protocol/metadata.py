@@ -33,16 +33,23 @@ def extract_params(data: dict[str, Any]) -> dict[str, Any]:
     return params if isinstance(params, dict) else {}
 
 
-def extract_request_metadata(data: dict[str, Any]) -> RequestMetadata | None:
+def _read_request_metadata(data: dict[str, Any]) -> tuple[dict[str, Any] | None, Any, Any, Any]:
     params = extract_params(data)
     meta = params.get("_meta")
     if not isinstance(meta, dict):
+        return None, None, None, None
+    return (
+        meta,
+        meta.get(PROTOCOL_VERSION_META_KEY),
+        meta.get(CLIENT_INFO_META_KEY),
+        meta.get(CLIENT_CAPABILITIES_META_KEY),
+    )
+
+
+def extract_request_metadata(data: dict[str, Any]) -> RequestMetadata | None:
+    meta, version, client_info, client_capabilities = _read_request_metadata(data)
+    if meta is None or not isinstance(version, str):
         return None
-    version = meta.get(PROTOCOL_VERSION_META_KEY)
-    if not isinstance(version, str):
-        return None
-    client_info = meta.get(CLIENT_INFO_META_KEY)
-    client_capabilities = meta.get(CLIENT_CAPABILITIES_META_KEY)
     return RequestMetadata(
         protocol_version=version,
         client_info=client_info if isinstance(client_info, dict) else {},
@@ -52,22 +59,18 @@ def extract_request_metadata(data: dict[str, Any]) -> RequestMetadata | None:
 
 
 def require_request_metadata(data: dict[str, Any]) -> RequestMetadata:
-    params = extract_params(data)
-    meta = params.get("_meta")
-    if not isinstance(meta, dict):
+    meta, version, client_info, client_capabilities = _read_request_metadata(data)
+    if meta is None:
         raise RequestMetadataError("Invalid params: missing _meta")
 
-    version = meta.get(PROTOCOL_VERSION_META_KEY)
     if not isinstance(version, str) or not version:
         raise RequestMetadataError(f"Invalid params: missing {PROTOCOL_VERSION_META_KEY}")
 
-    client_info = meta.get(CLIENT_INFO_META_KEY)
     if not isinstance(client_info, dict):
         raise RequestMetadataError(f"Invalid params: missing {CLIENT_INFO_META_KEY}")
     if not isinstance(client_info.get("name"), str) or not isinstance(client_info.get("version"), str):
         raise RequestMetadataError(f"Invalid params: malformed {CLIENT_INFO_META_KEY}")
 
-    client_capabilities = meta.get(CLIENT_CAPABILITIES_META_KEY)
     if not isinstance(client_capabilities, dict):
         raise RequestMetadataError(f"Invalid params: missing {CLIENT_CAPABILITIES_META_KEY}")
 

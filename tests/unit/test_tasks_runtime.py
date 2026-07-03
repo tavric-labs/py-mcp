@@ -281,6 +281,9 @@ async def test_tasks_update_acknowledges_input_responses_for_active_task():
     )
 
     assert update_response.payload["result"] == {}
+    record = await app.state.task_manager.get_task(task.task_id, session.session_id)
+    assert record is not None
+    assert record.input_responses == {"approval": {"approved": True}}
 
 
 async def test_tool_results_preserve_rich_payloads_for_direct_and_task_calls():

@@ -5,6 +5,7 @@ from pymcp.protocol.extensions import (
     MCP_APPS_UI,
     MCP_ENTERPRISE_MANAGED_AUTHORIZATION,
     MCP_OAUTH_CLIENT_CREDENTIALS,
+    MCP_TASKS,
 )
 
 
@@ -123,7 +124,7 @@ class TestGenericSupports:
         assert cc.supports("tasks")
 
     def test_supports_tasks_when_declared_as_extension(self):
-        cc = ClientCapabilities({"extensions": {"io.modelcontextprotocol/tasks": {}}})
+        cc = ClientCapabilities({"extensions": {MCP_TASKS: {}}})
         assert cc.supports("tasks")
 
     def test_supports_official_extension_features(self):

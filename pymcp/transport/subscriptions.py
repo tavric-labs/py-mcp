@@ -27,6 +27,11 @@ async def stream_stateless_subscription(
     *,
     heartbeat_interval: float = 10.0,
 ):
+    """Placeholder SSE stream for stateless draft subscriptions.
+
+    This currently keeps the connection alive with heartbeats until a shared
+    stateless notification source exists.
+    """
     shutdown = ensure_shutdown_event(request.app)
     params = data.get("params")
     params_dict = params if isinstance(params, dict) else {}
@@ -41,10 +46,11 @@ async def stream_stateless_subscription(
     if isinstance(rpc_id, (str, int)) and not isinstance(rpc_id, bool):
         ack["params"]["_meta"] = {"io.modelcontextprotocol/subscriptionId": rpc_id}
     yield format_sse(json.dumps(ack), event="message")
+    idle_queue: asyncio.Queue[str] = asyncio.Queue()
     try:
         while not shutdown.is_set() and not await request.is_disconnected():
             yield ": ping\n\n"
-            await wait_queue_message(asyncio.Queue(), shutdown=shutdown, timeout=heartbeat_interval)
+            await wait_queue_message(idle_queue, shutdown=shutdown, timeout=heartbeat_interval)
     except Exception:
         return
 

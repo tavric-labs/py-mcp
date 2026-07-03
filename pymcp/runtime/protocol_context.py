@@ -12,6 +12,7 @@ from ..protocol.metadata import RequestMetadata
 from ..protocol.revisions import ProtocolRevision
 from ..registries.registry import get_registry_manager
 from ..registries.registry import RegistryManager
+from ..security.authn import Principal
 from ..session.store import SessionManager, get_session_manager
 from ..session.types import Session
 from ..settings import ServerSettings
@@ -50,8 +51,8 @@ class RuntimeServices:
         )
 
 
-def transient_stateless_session() -> Session:
-    return Session(session_id="stateless", queue=asyncio.Queue())
+def transient_stateless_session(principal: Principal | None = None) -> Session:
+    return Session(session_id="stateless", queue=asyncio.Queue(), principal=principal)
 
 
 def build_session_dispatch_context(
@@ -93,13 +94,14 @@ def build_stateless_dispatch_context(
     services: RuntimeServices,
     protocol_revision: ProtocolRevision,
     request_metadata: RequestMetadata,
+    principal: Principal | None = None,
     direct_response: bool,
 ) -> DispatchContext:
     return DispatchContext(
         session_id="stateless",
         data=data,
         app=app,
-        session=transient_stateless_session(),
+        session=transient_stateless_session(principal=principal),
         rpc_id=rpc_id,
         method=method,
         registry_manager=services.registry_manager,

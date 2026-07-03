@@ -207,6 +207,30 @@ async def handle_tasks_update(ctx: DispatchContext) -> DispatchResult:
         await ctx.maybe_enqueue(payload)
         return make_result(200, json_response=True, payload=payload)
 
+    record = await ctx.task_manager.update_task_input_responses(
+        task_id,
+        ctx.session_id,
+        principal=ctx.session.principal,
+        input_responses=input_responses,
+    )
+    if not record:
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            "Failed to update task: Task not found",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    await send_notification(
+        ctx.session,
+        {
+            "jsonrpc": "2.0",
+            "method": "notifications/tasks/status",
+            "params": record.to_wire(),
+        },
+    )
+
     payload = ctx.payloads().success(ctx.rpc_id, {})
     await ctx.maybe_enqueue(payload)
     return make_result(200, json_response=True, payload=payload)

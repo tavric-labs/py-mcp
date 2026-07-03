@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from typing import Sequence
-from urllib.parse import quote
+from urllib.parse import quote, urlparse
 
 from fastapi import Request
 
@@ -15,17 +15,65 @@ def _json_object(value: dict[str, JSONValue]) -> JSONObject:
     return dict(value)
 
 
+def _validate_absolute_url(value: str, *, field_name: str) -> str:
+    parsed = urlparse(value)
+    if not parsed.scheme or not parsed.netloc or parsed.fragment:
+        raise ValueError(f"{field_name} must be an absolute URL")
+    return value
+
+
+def _metadata_url_from_resource_uri(resource_uri: str) -> str:
+    parsed = urlparse(_validate_absolute_url(resource_uri, field_name="resource"))
+    suffix = "/.well-known/oauth-protected-resource"
+    path = parsed.path.lstrip("/")
+    if path:
+        suffix = f"{suffix}/{path}"
+    return f"{parsed.scheme}://{parsed.netloc}{suffix}"
+
+
 @dataclass(frozen=True, slots=True)
 class OAuthProtectedResourceConfig:
     """Configuration for RFC 9728 protected resource metadata."""
 
     authorization_servers: Sequence[str]
     resource: str | None = None
+    resource_metadata_url: str | None = None
     scopes_supported: Sequence[str] = field(default_factory=tuple)
     bearer_methods_supported: Sequence[str] = ("header",)
     resource_name: str | None = None
     documentation_uri: str | None = None
     extra_metadata: JSONObject = field(default_factory=dict)
+
+    def __post_init__(self) -> None:
+        if isinstance(self.authorization_servers, str) or not self.authorization_servers:
+            raise ValueError("authorization_servers must not be empty")
+
+        validated_servers = tuple(
+            _validate_absolute_url(server, field_name="authorization_servers")
+            for server in self.authorization_servers
+        )
+        object.__setattr__(self, "authorization_servers", validated_servers)
+
+        if self.resource is not None:
+            object.__setattr__(
+                self,
+                "resource",
+                _validate_absolute_url(self.resource, field_name="resource"),
+            )
+
+        if self.resource_metadata_url is not None:
+            object.__setattr__(
+                self,
+                "resource_metadata_url",
+                _validate_absolute_url(self.resource_metadata_url, field_name="resource_metadata_url"),
+            )
+
+    def resolved_metadata_url(self, request: Request) -> str:
+        if self.resource_metadata_url is not None:
+            return self.resource_metadata_url
+        if self.resource is not None:
+            return _metadata_url_from_resource_uri(self.resource)
+        return protected_resource_metadata_url(request)
 
     def metadata(self, *, resource: str) -> JSONObject:
         payload: dict[str, JSONValue] = {

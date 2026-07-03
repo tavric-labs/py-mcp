@@ -404,6 +404,7 @@ async def mcp_post(request: Request) -> Response:
         result = await process_stateless_jsonrpc_message(
             data,
             app=request.app,
+            principal=request_principal,
             direct_response=True,
         )
     else:

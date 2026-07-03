@@ -80,6 +80,20 @@ class SecurityMiddleware(BaseHTTPMiddleware):
             logger.debug("[HTTP][AUTH][SKIP] method=%s path=%s", request.method, request.url.path)
             return await call_next(request)
 
+        if request.query_params.get("access_token") is not None:
+            logger.debug(
+                "[HTTP][AUTH][FAILED] method=%s path=%s rpc_method=%s reason=query access_token forbidden",
+                request.method,
+                request.url.path,
+                None,
+            )
+            headers = self._auth_challenge_headers(request, error="invalid_token")
+            return JSONResponse(
+                status_code=401,
+                content=build_error_response(None, MCPErrorCode.UNAUTHORIZED, "Access tokens in the query string are not supported"),
+                headers=headers,
+            )
+
         rpc_id: RPCId = None
         rpc_method: str | None = None
         params: JSONObject | None = None
@@ -202,6 +216,7 @@ class SecurityMiddleware(BaseHTTPMiddleware):
                 scopes=scopes,
                 error=error,
                 error_description=error_description,
+                metadata_url=self._oauth.resolved_metadata_url(request),
             )
         }
 

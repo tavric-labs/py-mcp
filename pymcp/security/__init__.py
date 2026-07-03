@@ -17,7 +17,12 @@ from .authz import (
     build_authz_request,
     infer_capability,
 )
-from .configured import RuleBasedAuthorizer, TokenMapAuthenticator, load_json_config
+from .configured import (
+    RuleBasedAuthorizer,
+    TokenIntrospectionAuthenticator,
+    TokenMapAuthenticator,
+    load_json_config,
+)
 from .oauth import OAuthProtectedResourceConfig
 
 __all__ = [
@@ -33,6 +38,7 @@ __all__ = [
     "OAuthProtectedResourceConfig",
     "Principal",
     "RuleBasedAuthorizer",
+    "TokenIntrospectionAuthenticator",
     "TokenMapAuthenticator",
     "build_authz_request",
     "get_bearer_token",

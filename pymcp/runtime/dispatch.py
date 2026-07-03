@@ -12,6 +12,7 @@ from ..protocol.errors import MCPErrorCode, build_error_response
 from ..protocol.meta import MetaValidationError, validate_request_meta
 from ..protocol.metadata import RequestMetadataError, require_request_metadata
 from ..protocol.validate import validate_jsonrpc_request
+from ..security.authn import Principal
 from ..security.authz import AuthorizationError, build_authz_request
 from ..session.store import SessionManager, get_session_manager
 from ..session.types import Session, SessionState
@@ -331,6 +332,7 @@ class Dispatcher:
         *,
         data: JSONObject,
         app: FastAPI,
+        principal: Principal | None = None,
         direct_response: bool = True,
     ) -> DispatchResponse:
         rpc_id, method = self._validate_envelope(data)
@@ -387,6 +389,7 @@ class Dispatcher:
             services=services,
             protocol_revision=revision,
             request_metadata=request_metadata,
+            principal=principal,
             direct_response=direct_response,
         )
         return await self._run_pipeline(ctx)
@@ -418,11 +421,13 @@ async def process_stateless_jsonrpc_message(
     data: JSONObject,
     *,
     app: FastAPI,
+    principal: Principal | None = None,
     direct_response: bool = True,
 ) -> DispatchResult:
     return await _stateless_processor.process(
         data=data,
         app=app,
+        principal=principal,
         direct_response=direct_response,
     )
 

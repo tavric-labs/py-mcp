@@ -7,10 +7,18 @@ from pymcp.protocol.extensions import (
     MCP_APPS_UI,
     MCP_ENTERPRISE_MANAGED_AUTHORIZATION,
     MCP_OAUTH_CLIENT_CREDENTIALS,
+    MCP_TASKS,
 )
+from pymcp.runtime.protocol_context import (
+    RuntimeServices,
+    build_stateless_dispatch_context,
+)
+from pymcp.protocol.metadata import RequestMetadata
+from pymcp.protocol.revisions import LATEST_DRAFT_PROTOCOL_VERSION, get_protocol_revision
+from pymcp.security.authn import Principal
 
 
-DRAFT_VERSION = "2026-07-28"
+DRAFT_VERSION = LATEST_DRAFT_PROTOCOL_VERSION
 
 
 def _draft_meta(version: str = DRAFT_VERSION) -> dict:
@@ -66,7 +74,7 @@ def test_draft_server_discover_is_stateless_and_cacheable():
     assert result["ttlMs"] == 0
     assert result["cacheScope"] == "private"
     extensions = result["capabilities"]["extensions"]
-    assert "io.modelcontextprotocol/tasks" in extensions
+    assert MCP_TASKS in extensions
     assert "tasks" not in result["capabilities"]
 
 
@@ -236,3 +244,33 @@ def test_draft_http_unsupported_version_lists_supported_versions():
     assert error["code"] == MCPErrorCode.UNSUPPORTED_PROTOCOL_VERSION
     assert error["data"]["requested"] == "1900-01-01"
     assert DRAFT_VERSION in error["data"]["supported"]
+
+
+def test_stateless_dispatch_context_carries_principal():
+    app = create_app(protocol_mode="draft", middleware_config=None)
+    services = RuntimeServices.from_app(app)
+    principal = Principal(subject="alice")
+    ctx = build_stateless_dispatch_context(
+        data={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "tools/list",
+            "params": {"_meta": _draft_meta()},
+        },
+        app=app,
+        rpc_id=1,
+        method="tools/list",
+        server_settings=app.state.server_settings,
+        services=services,
+        protocol_revision=get_protocol_revision(DRAFT_VERSION),
+        request_metadata=RequestMetadata(
+            protocol_version=DRAFT_VERSION,
+            client_info={"name": "test-client", "version": "1.0.0"},
+            client_capabilities={},
+            raw=_draft_meta(),
+        ),
+        principal=principal,
+        direct_response=True,
+    )
+
+    assert ctx.session.principal == principal

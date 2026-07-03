@@ -8,6 +8,7 @@ from fastapi import FastAPI
 
 from ..observability.logging import get_logger
 from ..protocol.errors import build_error_response
+from ..security.authn import Principal
 from ..session.store import get_session_manager
 from .protocol_context import RuntimeServices, build_session_dispatch_context
 from .types import DispatchResult, JSONObject, make_result
@@ -34,6 +35,7 @@ class StatelessMessageProcessor(Protocol):
         *,
         data: JSONObject,
         app: FastAPI,
+        principal: Principal | None = None,
         direct_response: bool = True,
     ) -> DispatchResult:
         ...
@@ -91,12 +93,14 @@ class StatelessJsonRpcMessageProcessor:
         *,
         data: JSONObject,
         app: FastAPI,
+        principal: Principal | None = None,
         direct_response: bool = True,
     ) -> DispatchResult:
         try:
             return await self._dispatcher.dispatch_stateless(
                 data=data,
                 app=app,
+                principal=principal,
                 direct_response=direct_response,
             )
         except self._dispatcher.dispatch_error_type as exc:
