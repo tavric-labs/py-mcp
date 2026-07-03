@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import json
 from dataclasses import dataclass
@@ -184,7 +185,8 @@ class TokenIntrospectionAuthenticator:  # pylint: disable=too-few-public-methods
         payload.update(self._extra_params)
 
         try:
-            response = requests.post(
+            response = await asyncio.to_thread(
+                requests.post,
                 self._introspection_url,
                 data=payload,
                 timeout=self._timeout,

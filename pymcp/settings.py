@@ -8,6 +8,7 @@ from typing import Any
 from .protocol.extensions import DEFAULT_MCP_APPS_UI_MIME_TYPES
 from .protocol.revisions import (
     DEFAULT_PROTOCOL_MODE,
+    get_protocol_revision,
     ProtocolMode,
     STABLE_PROTOCOL_VERSIONS,
     enabled_protocol_revisions,
@@ -59,6 +60,7 @@ class ServerSettings:
     version: str = "0.2.0"
     protocol_mode: ProtocolMode = DEFAULT_PROTOCOL_MODE
     protocol_versions: tuple[str, ...] | None = None
+    initializable_protocol_versions: tuple[str, ...] | None = None
     capabilities: CapabilitySettings = field(default_factory=CapabilitySettings)
     title: str | None = None
     description: str | None = None
@@ -74,6 +76,14 @@ class ServerSettings:
                 "at least one supported version is required"
             )
         enabled_protocol_revisions(tuple(self.protocol_versions))
+        if self.initializable_protocol_versions is None:
+            self.initializable_protocol_versions = tuple(
+                version
+                for version in self.protocol_versions
+                if (revision := get_protocol_revision(version)) is not None and revision.supports_initialization
+            )
+        else:
+            enabled_protocol_revisions(tuple(self.initializable_protocol_versions))
 
 
 __all__ = [

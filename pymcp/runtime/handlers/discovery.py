@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 from ...capabilities.registry import ServerCapabilities, negotiate_capabilities
+from ...observability.logging import get_logger
 from ...protocol.json_types import JSONObject
 from ..types import DispatchContext, DispatchResult, make_result
 from .registry import rpc_method
+
+logger = get_logger(__name__)
 
 
 def _server_info(ctx: DispatchContext) -> JSONObject:
@@ -33,9 +36,22 @@ async def handle_server_discover(ctx: DispatchContext) -> DispatchResult:
         if ctx.request_metadata is not None
         else ctx.session.client_capabilities.get_capabilities()
     )
+    capabilities = negotiate_capabilities(client_capabilities, server_capabilities)
+    authorizer = getattr(getattr(ctx.app, "state", None), "authorizer", None)
+    principal = ctx.session.principal
+    if authorizer is not None:
+        try:
+            filtered = authorizer.filter_capabilities(principal, capabilities)
+            if isinstance(filtered, dict):
+                capabilities = filtered
+        except Exception:
+            logger.exception(
+                "Failed to filter discovery capabilities for principal %s",
+                principal.subject if principal is not None else None,
+            )
     result: JSONObject = {
         "supportedVersions": list(ctx.server_settings.protocol_versions),
-        "capabilities": negotiate_capabilities(client_capabilities, server_capabilities),
+        "capabilities": capabilities,
         "serverInfo": _server_info(ctx),
     }
     payload = ctx.payloads().success(ctx.rpc_id, result)

@@ -23,6 +23,7 @@ from .revisions import LATEST_DRAFT_PROTOCOL_VERSION, get_protocol_revision
 SUPPORTED_PROTOCOL_VERSIONS: Final[tuple[str, ...]] = SERVER_SUPPORTED_PROTOCOL_VERSIONS
 DEFAULT_PROTOCOL_VERSION: Final[str] = SUPPORTED_PROTOCOL_VERSIONS[0]
 
+
 def success(rpc_id: RPCId, result: JSONObject) -> JSONObject:
     return build_result_envelope(rpc_id, result)
 
@@ -44,11 +45,18 @@ def negotiate_protocol_version(
         if settings is not None and settings.protocol_versions
         else SUPPORTED_PROTOCOL_VERSIONS
     )
+    initializable_versions = (
+        tuple(settings.initializable_protocol_versions)
+        if settings is not None and settings.initializable_protocol_versions is not None
+        else supported_versions
+    )
+    if not initializable_versions:
+        return None, "No protocol versions are available for initialization"
     if not requested_version:
-        return supported_versions[0], None
-    if requested_version in supported_versions:
+        return initializable_versions[0], None
+    if requested_version in initializable_versions:
         return requested_version, None
-    supported = ", ".join(supported_versions)
+    supported = ", ".join(initializable_versions)
     return None, f"Unsupported protocolVersion '{requested_version}'. Supported: {supported}"
 
 
@@ -269,10 +277,14 @@ def get_payload_factory(protocol_version: str | None, *, app: FastAPI | None = N
         if app is not None and hasattr(app.state, "server_settings")
         else None
     )
-    version, error_message = negotiate_protocol_version(protocol_version, settings)
-    if version is None:
-        raise ValueError(error_message or "Unsupported protocolVersion")
+    version = protocol_version or (
+        settings.protocol_versions[0]
+        if settings is not None and settings.protocol_versions
+        else DEFAULT_PROTOCOL_VERSION
+    )
     revision = get_protocol_revision(version)
+    if revision is None:
+        raise ValueError(f"Unsupported protocolVersion '{version}'")
     factory_cls = _FACTORY_BY_PROTOCOL_VERSION.get(
         version,
         PayloadFactory_2026_07_28 if revision is not None and revision.stateless else PayloadFactory,

@@ -21,6 +21,22 @@ from pymcp.security.authn import Principal
 DRAFT_VERSION = LATEST_DRAFT_PROTOCOL_VERSION
 
 
+class _DiscoverFilteringAuthorizer:
+    def authorize(self, principal, request):
+        return None
+
+    def filter_capabilities(self, principal, capabilities):
+        filtered = dict(capabilities)
+        filtered.pop("tasks", None)
+        extensions = dict(filtered.get("extensions") or {})
+        extensions.pop(MCP_TASKS, None)
+        if extensions:
+            filtered["extensions"] = extensions
+        elif "extensions" in filtered:
+            filtered.pop("extensions", None)
+        return filtered
+
+
 def _draft_meta(version: str = DRAFT_VERSION) -> dict:
     return {
         "io.modelcontextprotocol/protocolVersion": version,
@@ -76,6 +92,26 @@ def test_draft_server_discover_is_stateless_and_cacheable():
     extensions = result["capabilities"]["extensions"]
     assert MCP_TASKS in extensions
     assert "tasks" not in result["capabilities"]
+
+
+def test_draft_initialize_rejects_the_draft_version():
+    client = TestClient(create_app(protocol_mode="draft", middleware_config=None))
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": 1,
+            "method": "initialize",
+            "params": {"protocolVersion": DRAFT_VERSION, "_meta": _draft_meta()},
+        },
+        headers=_draft_headers("initialize"),
+    )
+
+    assert response.status_code == 200
+    error = response.json()["error"]
+    assert error["code"] == MCPErrorCode.METHOD_NOT_FOUND
+    assert error["message"] == "Method not found: initialize"
 
 
 def test_draft_tools_list_uses_result_type_and_cache_fields():
@@ -169,6 +205,32 @@ def test_draft_custom_extensions_are_advertised():
     assert response.status_code == 200
     extensions = response.json()["result"]["capabilities"]["extensions"]
     assert extensions["io.modelcontextprotocol/custom"] == {"enabled": True}
+
+
+def test_draft_server_discover_applies_capability_filtering():
+    client = TestClient(
+        create_app(
+            authz=_DiscoverFilteringAuthorizer(),
+            server_settings=ServerSettings(protocol_mode="draft"),
+            middleware_config=None,
+        )
+    )
+
+    response = client.post(
+        "/mcp",
+        json={
+            "jsonrpc": "2.0",
+            "id": "discover-2",
+            "method": "server/discover",
+            "params": {"_meta": _draft_meta()},
+        },
+        headers=_draft_headers("server/discover"),
+    )
+
+    assert response.status_code == 200
+    capabilities = response.json()["result"]["capabilities"]
+    assert "tasks" not in capabilities
+    assert MCP_TASKS not in capabilities.get("extensions", {})
 
 
 def test_draft_official_extensions_are_advertised_when_enabled():
