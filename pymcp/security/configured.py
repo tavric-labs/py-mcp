@@ -2,12 +2,14 @@
 
 from __future__ import annotations
 
+import asyncio
 import fnmatch
 import json
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Mapping, Sequence
 
+import requests
 from fastapi import Request
 
 from ..protocol.json_types import JSONObject, JSONValue
@@ -51,6 +53,14 @@ def _as_list(value: JSONValue | None) -> list[str]:
     return []
 
 
+def _as_scope_list(value: JSONValue | None) -> list[str]:
+    if value is None:
+        return []
+    if isinstance(value, str):
+        return [scope for scope in value.split() if scope]
+    return _as_list(value)
+
+
 def _matches_any(patterns: Sequence[str], value: str) -> bool:
     return any(fnmatch.fnmatch(value, pattern) for pattern in patterns)
 
@@ -86,6 +96,135 @@ class TokenMapAuthenticator:  # pylint: disable=too-few-public-methods
 
         roles = set(_as_list(entry.get("roles")))
         scopes = set(_as_list(entry.get("scopes")))
+        return Principal(
+            subject=subject,
+            display_name=display_name,
+            roles=roles,
+            scopes=scopes,
+            claims=claims,
+        )
+
+
+class TokenIntrospectionAuthenticator:  # pylint: disable=too-few-public-methods
+    """Authenticator that validates Bearer tokens through an introspection endpoint."""
+
+    def __init__(
+        self,
+        introspection_url: str,
+        *,
+        client_id: str | None = None,
+        client_secret: str | None = None,
+        timeout: float = 5.0,
+        token_type_hint: str = "access_token",
+        subject_claim: str = "sub",
+        display_name_claim: str | None = "name",
+        scopes_claim: str = "scope",
+        roles_claim: str | None = "roles",
+        expected_audience: str | None = None,
+        expected_resource: str | None = None,
+        expected_issuer: str | None = None,
+        verify_tls: bool = True,
+        extra_params: Mapping[str, JSONValue] | None = None,
+    ):
+        if not introspection_url.strip():
+            raise ValueError("introspection_url must not be empty")
+        self._introspection_url = introspection_url
+        self._client_id = client_id
+        self._client_secret = client_secret
+        self._timeout = timeout
+        self._token_type_hint = token_type_hint
+        self._subject_claim = subject_claim
+        self._display_name_claim = display_name_claim
+        self._scopes_claim = scopes_claim
+        self._roles_claim = roles_claim
+        self._expected_audience = expected_audience
+        self._expected_resource = expected_resource
+        self._expected_issuer = expected_issuer
+        self._verify_tls = verify_tls
+        self._extra_params = dict(extra_params or {})
+
+    def _request_auth(self):
+        if self._client_id is None:
+            return None
+        return (self._client_id, self._client_secret or "")
+
+    @staticmethod
+    def _extract_string(value: object) -> str | None:
+        if isinstance(value, str) and value:
+            return value
+        return None
+
+    def _validate_claims(self, claims: Mapping[str, JSONValue]) -> None:
+        active = claims.get("active")
+        if active is not True:
+            raise AuthenticationError("Invalid Bearer token")
+
+        if self._expected_issuer is not None:
+            issuer = self._extract_string(claims.get("iss"))
+            if issuer != self._expected_issuer:
+                raise AuthenticationError("Invalid token issuer")
+
+        if self._expected_audience is not None:
+            audience_values = _as_list(claims.get("aud"))
+            if self._expected_audience not in audience_values:
+                raise AuthenticationError("Invalid token audience")
+
+        if self._expected_resource is not None:
+            resource_values = _as_list(claims.get("resource"))
+            if self._expected_resource not in resource_values:
+                raise AuthenticationError("Invalid token resource")
+
+    async def authenticate(self, request: Request) -> Principal | None:
+        token = get_bearer_token(request)
+        if not token:
+            return None
+
+        payload: dict[str, JSONValue] = {"token": token}
+        if self._token_type_hint:
+            payload["token_type_hint"] = self._token_type_hint
+        payload.update(self._extra_params)
+
+        try:
+            response = await asyncio.to_thread(
+                requests.post,
+                self._introspection_url,
+                data=payload,
+                timeout=self._timeout,
+                auth=self._request_auth(),
+                verify=self._verify_tls,
+                headers={"Accept": "application/json"},
+            )
+        except requests.RequestException as exc:
+            raise AuthenticationError("Token introspection failed") from exc
+
+        if response.status_code >= 400:
+            raise AuthenticationError("Token introspection failed")
+
+        try:
+            raw_claims = response.json()
+        except ValueError as exc:
+            raise AuthenticationError("Token introspection returned invalid JSON") from exc
+
+        if not isinstance(raw_claims, Mapping):
+            raise AuthenticationError("Token introspection returned invalid JSON")
+
+        claims: dict[str, JSONValue] = {}
+        for key, value in raw_claims.items():
+            if isinstance(key, str) and key:
+                claims[key] = value  # requests already decodes JSON into JSON-compatible values
+
+        self._validate_claims(claims)
+
+        subject = self._extract_string(claims.get(self._subject_claim))
+        if subject is None:
+            raise AuthenticationError("Invalid token principal: missing subject")
+
+        display_name = None
+        if self._display_name_claim is not None:
+            display_name = self._extract_string(claims.get(self._display_name_claim))
+
+        roles = set(_as_list(claims.get(self._roles_claim))) if self._roles_claim is not None else set()
+        scopes = set(_as_scope_list(claims.get(self._scopes_claim)))
         return Principal(
             subject=subject,
             display_name=display_name,
@@ -341,6 +480,7 @@ class RuleBasedAuthorizer:  # pylint: disable=too-few-public-methods
 
 __all__ = [
     "RuleBasedAuthorizer",
+    "TokenIntrospectionAuthenticator",
     "TokenMapAuthenticator",
     "load_json_config",
 ]

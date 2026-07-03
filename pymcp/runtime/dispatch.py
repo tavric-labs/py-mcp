@@ -10,19 +10,31 @@ from fastapi import FastAPI
 from ..observability.logging import get_logger
 from ..protocol.errors import MCPErrorCode, build_error_response
 from ..protocol.meta import MetaValidationError, validate_request_meta
+from ..protocol.metadata import RequestMetadataError, require_request_metadata
 from ..protocol.validate import validate_jsonrpc_request
-from ..registries.registry import get_registry_manager
+from ..security.authn import Principal
 from ..security.authz import AuthorizationError, build_authz_request
 from ..session.store import SessionManager, get_session_manager
 from ..session.types import Session, SessionState
-from ..tasks.cancellation import get_cancellation_manager
-from ..tasks.engine import get_task_manager
+from .processors import (
+    SessionJsonRpcMessageProcessor,
+    SessionMessageProcessor,
+    StatelessJsonRpcMessageProcessor,
+    StatelessMessageProcessor,
+)
+from .protocol_context import (
+    RuntimeServices,
+    build_session_dispatch_context,
+    build_stateless_dispatch_context,
+    resolve_protocol_revision,
+)
 from .handlers.registry import get_registered_handlers
 from .types import DispatchContext, DispatchResponse, DispatchResult, JSONObject, make_result
 
 # Side-effect imports register built-in handlers.
 from .handlers import completions as _completions  # noqa: F401
 from .handlers import lifecycle as _lifecycle  # noqa: F401
+from .handlers import discovery as _discovery  # noqa: F401
 from .handlers import logging as _logging  # noqa: F401
 from .handlers import prompts as _prompts  # noqa: F401
 from .handlers import resources as _resources  # noqa: F401
@@ -46,6 +58,7 @@ class DispatchError(Exception):
         message: str,
         rpc_id,
         require_id: bool = True,
+        data=None,
     ):
         super().__init__(message)
         self.status = status
@@ -53,6 +66,7 @@ class DispatchError(Exception):
         self.message = message
         self.rpc_id = rpc_id
         self.require_id = require_id
+        self.data = data
 
 
 def _rpc_id_from_data(data: JSONObject):
@@ -98,6 +112,8 @@ class InitGateMiddleware:
         self._post_init_allowed = frozenset(post_init_allowed)
 
     async def __call__(self, ctx: DispatchContext, call_next: DispatchNext) -> DispatchResponse:
+        if ctx.protocol_revision is not None and ctx.protocol_revision.stateless:
+            return await call_next(ctx)
         state = ctx.session.lifecycle_state
         if state == SessionState.CLOSED:
             payload = build_error_response(ctx.rpc_id, MCPErrorCode.SESSION_NOT_FOUND, "Session is closed")
@@ -137,6 +153,39 @@ class CapabilityGateMiddleware:
         return await call_next(ctx)
 
 
+class RevisionMethodGateMiddleware:
+    _STATELESS_UNSUPPORTED = frozenset(
+        {
+            "initialize",
+            "notifications/initialized",
+            "ping",
+            "resources/subscribe",
+            "resources/unsubscribe",
+            "logging/setLevel",
+        }
+    )
+
+    async def __call__(self, ctx: DispatchContext, call_next: DispatchNext) -> DispatchResponse:
+        revision = ctx.protocol_revision
+        if revision is not None and revision.stateless and ctx.method in self._STATELESS_UNSUPPORTED:
+            payload = build_error_response(
+                ctx.rpc_id,
+                MCPErrorCode.METHOD_NOT_FOUND,
+                f"Method not found: {ctx.method}",
+            )
+            await ctx.maybe_enqueue(payload)
+            return DispatchResponse(status=200, json=True, payload=payload)
+        if revision is not None and not revision.supports_discovery and ctx.method == "server/discover":
+            payload = build_error_response(
+                ctx.rpc_id,
+                MCPErrorCode.METHOD_NOT_FOUND,
+                f"Method not found: {ctx.method}",
+            )
+            await ctx.maybe_enqueue(payload)
+            return DispatchResponse(status=200, json=True, payload=payload)
+        return await call_next(ctx)
+
+
 class AuthorizationGateMiddleware:
     async def __call__(self, ctx: DispatchContext, call_next: DispatchNext) -> DispatchResponse:
         authorizer = getattr(getattr(ctx.app, "state", None), "authorizer", None)
@@ -157,6 +206,9 @@ class AuthorizationGateMiddleware:
 
 
 class Dispatcher:
+    dispatch_error_type = DispatchError
+    rpc_id_from_data = staticmethod(_rpc_id_from_data)
+
     def __init__(
         self,
         *,
@@ -173,6 +225,7 @@ class Dispatcher:
                     pre_init_allowed=_PRE_INIT_ALLOWED,
                     post_init_allowed=_POST_INIT_ALLOWED,
                 ),
+                RevisionMethodGateMiddleware(),
                 CapabilityGateMiddleware(),
                 AuthorizationGateMiddleware(),
             ]
@@ -260,25 +313,93 @@ class Dispatcher:
         if server_settings is None:
             raise RuntimeError("app.state.server_settings is not set; initialize the app with create_app")
 
-        ctx = DispatchContext(
+        services = RuntimeServices.from_app(app)
+        ctx = build_session_dispatch_context(
             session_id=session_id,
             data=data,
             app=app,
             session=session,
             rpc_id=rpc_id,
             method=method,
-            registry_manager=get_registry_manager(app),
             server_settings=server_settings,
-            session_manager=session_manager,
-            cancellation_manager=get_cancellation_manager(app),
-            task_manager=get_task_manager(app),
+            services=services,
             direct_response=direct_response,
-            queue=session.queue,
+        )
+        return await self._run_pipeline(ctx)
+
+    async def dispatch_stateless(
+        self,
+        *,
+        data: JSONObject,
+        app: FastAPI,
+        principal: Principal | None = None,
+        direct_response: bool = True,
+    ) -> DispatchResponse:
+        rpc_id, method = self._validate_envelope(data)
+        self._validate_request(data)
+        try:
+            validate_request_meta(data)
+            request_metadata = require_request_metadata(data)
+        except MetaValidationError as exc:
+            raise DispatchError(
+                status=200,
+                code=exc.code,
+                message=str(exc),
+                rpc_id=rpc_id if "id" in data else None,
+            ) from exc
+        except RequestMetadataError as exc:
+            raise DispatchError(
+                status=400,
+                code=exc.code,
+                message=str(exc),
+                rpc_id=rpc_id if "id" in data else None,
+            ) from exc
+
+        server_settings = getattr(app.state, "server_settings", None)
+        if server_settings is None:
+            raise RuntimeError("app.state.server_settings is not set; initialize the app with create_app")
+
+        revision = resolve_protocol_revision(request_metadata.protocol_version, server_settings)
+        if revision is None:
+            raise DispatchError(
+                status=400,
+                code=MCPErrorCode.UNSUPPORTED_PROTOCOL_VERSION,
+                message="Unsupported protocol version",
+                rpc_id=rpc_id if "id" in data else None,
+                data={
+                    "supported": list(server_settings.protocol_versions),
+                    "requested": request_metadata.protocol_version,
+                },
+            )
+        if not revision.stateless:
+            raise DispatchError(
+                status=400,
+                code=MCPErrorCode.INVALID_PARAMS,
+                message="Invalid params: stateless request metadata requires a stateless protocol version",
+                rpc_id=rpc_id if "id" in data else None,
+            )
+
+        services = RuntimeServices.from_app(app)
+        ctx = build_stateless_dispatch_context(
+            data=data,
+            app=app,
+            rpc_id=rpc_id,
+            method=method,
+            server_settings=server_settings,
+            services=services,
+            protocol_revision=revision,
+            request_metadata=request_metadata,
+            principal=principal,
+            direct_response=direct_response,
         )
         return await self._run_pipeline(ctx)
 
 
 _dispatcher = Dispatcher()
+
+
+_session_processor = SessionJsonRpcMessageProcessor(_dispatcher)
+_stateless_processor = StatelessJsonRpcMessageProcessor(_dispatcher)
 
 
 async def process_jsonrpc_message(
@@ -288,39 +409,36 @@ async def process_jsonrpc_message(
     app: FastAPI,
     direct_response: bool = False,
 ) -> DispatchResult:
-    try:
-        return await _dispatcher.dispatch(
-            session_id=session_id,
-            data=data,
-            app=app,
-            direct_response=direct_response,
-        )
-    except DispatchError as exc:
-        payload = build_error_response(exc.rpc_id, exc.code, exc.message)
-        try:
-            session = get_session_manager(app).get_session(session_id)
-            if session is not None:
-                server_settings = getattr(app.state, "server_settings", None)
-                if server_settings is not None:
-                    ctx = DispatchContext(
-                        session_id=session_id,
-                        data=data,
-                        app=app,
-                        session=session,
-                        rpc_id=_rpc_id_from_data(data),
-                        method=data.get("method") if isinstance(data.get("method"), str) else "<unknown>",
-                        registry_manager=get_registry_manager(app),
-                        server_settings=server_settings,
-                        session_manager=get_session_manager(app),
-                        cancellation_manager=get_cancellation_manager(app),
-                        task_manager=get_task_manager(app),
-                        direct_response=direct_response,
-                        queue=session.queue,
-                    )
-                    await ctx.maybe_enqueue(payload, require_id=exc.require_id)
-        except Exception:
-            logger.exception("Failed to enqueue dispatch error for session %s", session_id)
-        return make_result(exc.status, json_response=True, payload=payload)
+    return await _session_processor.process(
+        session_id=session_id,
+        data=data,
+        app=app,
+        direct_response=direct_response,
+    )
 
 
-__all__ = ["DispatchError", "Dispatcher", "process_jsonrpc_message"]
+async def process_stateless_jsonrpc_message(
+    data: JSONObject,
+    *,
+    app: FastAPI,
+    principal: Principal | None = None,
+    direct_response: bool = True,
+) -> DispatchResult:
+    return await _stateless_processor.process(
+        data=data,
+        app=app,
+        principal=principal,
+        direct_response=direct_response,
+    )
+
+
+__all__ = [
+    "DispatchError",
+    "Dispatcher",
+    "SessionMessageProcessor",
+    "SessionJsonRpcMessageProcessor",
+    "StatelessMessageProcessor",
+    "StatelessJsonRpcMessageProcessor",
+    "process_jsonrpc_message",
+    "process_stateless_jsonrpc_message",
+]

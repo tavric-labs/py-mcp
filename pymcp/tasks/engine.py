@@ -148,6 +148,7 @@ class TaskRecord:
     status_message: str | None = None
     result: JSONObject | None = None
     error: JSONObject | None = None
+    input_responses: JSONObject | None = None
     completion_event: asyncio.Event = field(default_factory=asyncio.Event)
     execution_handle: asyncio.Future[object] | None = None
     cancel_token_id: str | None = None
@@ -378,6 +379,28 @@ class TaskManager:
             if event is None:
                 return record
             return await self._apply_transition(record, event, status_message=status_message)
+
+    async def update_task_input_responses(
+        self,
+        task_id: str,
+        session_id: str,
+        *,
+        principal: Principal | None = None,
+        input_responses: JSONObject,
+    ) -> TaskRecord | None:
+        async with self._lock:
+            record = self._tasks.get(task_id)
+            if not record or not self._can_access(record, session_id, principal):
+                return None
+            if record.is_terminal():
+                return record
+
+            record.input_responses = dict(input_responses)
+            record.last_updated_at = _utc_now()
+
+            if record.status == TaskStatus.INPUT_REQUIRED:
+                record = await self._apply_transition(record, TaskEvent.RESUME, status_message="Input received")
+            return record
 
     async def mark_task_cancelled(
         self,

@@ -1,6 +1,13 @@
 """Protocol helpers and typed wire models for JSON-RPC and MCP."""
 
 from .errors import MCPError, MCPErrorCode
+from .extensions import (
+    DEFAULT_MCP_APPS_UI_MIME_TYPES,
+    MCP_APPS_UI,
+    MCP_ENTERPRISE_MANAGED_AUTHORIZATION,
+    MCP_OAUTH_CLIENT_CREDENTIALS,
+    MCP_TASKS,
+)
 from .json_types import JSONArray, JSONObject, JSONValue, RPCId
 from .jsonrpc import build_error_envelope, build_result_envelope, is_notification, validate_rpc_id
 from .payload import PayloadFactory, get_payload_factory, negotiate_protocol_version
@@ -54,6 +61,7 @@ __all__ = [
     "CallToolResult",
     "CancelledNotification",
     "CancelledNotificationParams",
+    "DEFAULT_MCP_APPS_UI_MIME_TYPES",
     "Annotations",
     "AudioContent",
     "ElicitationCompleteNotificationParams",
@@ -78,6 +86,10 @@ __all__ = [
     "ListToolsResult",
     "MCPError",
     "MCPErrorCode",
+    "MCP_APPS_UI",
+    "MCP_ENTERPRISE_MANAGED_AUTHORIZATION",
+    "MCP_OAUTH_CLIENT_CREDENTIALS",
+    "MCP_TASKS",
     "PayloadFactory",
     "ProgressNotification",
     "ProgressNotificationParams",

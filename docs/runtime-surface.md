@@ -4,12 +4,95 @@
 
 ## Supported Protocol Versions
 
-`ServerSettings.protocol_versions` currently defaults to:
+`ServerSettings.protocol_mode` defaults to `"stable"`, which enables:
 
 - `2025-11-25`
 - `2025-06-18`
 - `2025-03-26`
 - `2024-11-05`
+
+Draft `2026-07-28` support is opt-in:
+
+```python
+ServerSettings(protocol_mode="draft")  # draft only
+ServerSettings(protocol_mode="dual")   # draft plus stable versions
+```
+
+`ServerSettings(protocol_versions=(...))` can be used as an explicit override
+for compatibility testing.
+
+## Draft Stateless Request Flow
+
+Draft `2026-07-28` requests skip `initialize`/sessions entirely. Every request
+carries its own protocol version, client info, and client capabilities in
+`params._meta`, and is validated against matching HTTP headers before
+dispatch:
+
+```
+Client                                   HTTP Transport                              Dispatcher                          Handler
+  |                                            |                                           |                                  |
+  | POST /mcp                                  |                                           |                                  |
+  | headers: MCP-Protocol-Version,             |                                           |                                  |
+  |          Mcp-Method, [Mcp-Name]            |                                           |                                  |
+  | body:    params._meta = {                  |                                           |                                  |
+  |            protocolVersion,                |                                           |                                  |
+  |            clientInfo,                     |                                           |                                  |
+  |            clientCapabilities }            |                                           |                                  |
+  |------------------------------------------->|                                           |                                  |
+  |                                  [origin check]                                        |                                  |
+  |                                  request_body_protocol_version(data)                   |                                  |
+  |                                  looks_like_stateless_request() -> True                |                                  |
+  |                                  validate_stateless_http_metadata()                    |                                  |
+  |                                    - MCP-Protocol-Version present & == body._meta       |                                  |
+  |                                    - version in ServerSettings.protocol_versions        |                                  |
+  |                                    - Mcp-Method present & == body.method                |                                  |
+  |                                    - Mcp-Name required/matched for                      |                                  |
+  |                                      tools/call | resources/read | prompts/get          |                                  |
+  |                                    (any failure -> HEADER_MISMATCH /                    |                                  |
+  |                                     UNSUPPORTED_PROTOCOL_VERSION, HTTP error)            |                                  |
+  |                                            |                                           |                                  |
+  |                        [subscriptions/listen] --> stream_stateless_subscription (SSE)   |                                  |
+  |                                            |                                           |                                  |
+  |                                  process_stateless_jsonrpc_message(data)                |                                  |
+  |                                            |------------------------------------------>|                                  |
+  |                                            |                            require_request_metadata(data)                   |
+  |                                            |                              -> RequestMetadata(protocol_version,            |
+  |                                            |                                 client_info, client_capabilities)            |
+  |                                            |                            resolve_protocol_revision(version, settings)      |
+  |                                            |                              -> ProtocolRevision (must be stateless)         |
+  |                                            |                            build_stateless_dispatch_context(...)             |
+  |                                            |                              -> DispatchContext (transient session,          |
+  |                                            |                                 protocol_revision, request_metadata)         |
+  |                                            |                            middleware pipeline:                             |
+  |                                            |                              ErrorBoundary                                  |
+  |                                            |                              -> InitGateMiddleware (bypassed, stateless)     |
+  |                                            |                              -> RevisionMethodGateMiddleware                 |
+  |                                            |                                 (blocks initialize/ping/subscribe/etc.,      |
+  |                                            |                                  blocks server/discover if unsupported)      |
+  |                                            |                              -> CapabilityGateMiddleware                     |
+  |                                            |                              -> AuthorizationGateMiddleware                  |
+  |                                            |                              -> call_next -----------------------------------|
+  |                                            |                                                                              |
+  |                                            |                                                             rpc_method handler runs
+  |                                            |                                                             (e.g. server/discover,
+  |                                            |                                                              tools/list, tasks/update)
+  |                                            |                                                             ctx.payloads() ->
+  |                                            |                                                             PayloadFactory_2026_07_28:
+  |                                            |                                                               resultType="complete"
+  |                                            |                                                               ttlMs=0,
+  |                                            |                                                               cacheScope="private"
+  |                                            |                            <-----------------------------------------------|
+  |                                            |<-------------------------------------------                                 |
+  |<-------------------------------------------|                                                                              |
+  | 200 OK, no MCP-Session-Id header           |                                                                              |
+  | body: { result: {..., resultType,          |                                                                              |
+  |         ttlMs, cacheScope} }               |                                                                              |
+```
+
+Errors short-circuit at the HTTP layer (`HEADER_MISMATCH`,
+`UNSUPPORTED_PROTOCOL_VERSION`) before ever reaching the dispatcher, and
+`RequestMetadataError` short-circuits inside `dispatch_stateless` for
+malformed or missing `_meta` fields.
 
 ## Conformance
 
@@ -36,6 +119,12 @@ variants), resource reads/templates/subscriptions, and prompt retrieval.
 - `ping`
 - `notifications/initialized`
 - `notifications/cancelled`
+
+When draft `2026-07-28` is enabled, stateless requests use per-request `_meta`
+instead of `initialize`, and `server/discover` is available for discovery.
+Draft extension capabilities are advertised under `capabilities.extensions`.
+For example, task support is exposed as
+`io.modelcontextprotocol/tasks` instead of the stable top-level `tasks` key.
 
 ### Tools
 
@@ -187,7 +276,19 @@ Per the MCP 2025-11-25 spec, **server** capabilities (advertised in the initiali
 | `tasks_tool_call` | `True` | Advertise task augmentation for `tools/call`. |
 | `tasks_list` | `True` | Advertise the `tasks/list` capability fragment. |
 | `tasks_cancel` | `True` | Advertise the `tasks/cancel` capability fragment. |
+| `mcp_apps_enabled` | `False` | Advertise `io.modelcontextprotocol/ui` support. |
+| `mcp_apps_mime_types` | `("text/html;profile=mcp-app",)` | MIME types advertised for MCP Apps UI support. |
+| `mcp_apps_settings` | `None` | Explicit settings object for `io.modelcontextprotocol/ui`; overrides `mcp_apps_mime_types` when set. |
+| `oauth_client_credentials_enabled` | `False` | Advertise `io.modelcontextprotocol/oauth-client-credentials` support. |
+| `oauth_client_credentials_settings` | `None` | Explicit settings object for OAuth client credentials support. |
+| `enterprise_managed_authorization_enabled` | `False` | Advertise `io.modelcontextprotocol/enterprise-managed-authorization` support. |
+| `enterprise_managed_authorization_settings` | `None` | Explicit settings object for enterprise-managed authorization support. |
+| `extensions` | `None` | Dict of spec extension capabilities to advertise under `capabilities.extensions`. |
 | `experimental_features` | `None` | Dict of experimental server features to advertise. |
+
+Extension flags only advertise support. Auth token validation, enterprise policy
+enforcement, and MCP Apps rendering/hosting remain the responsibility of the
+application integrating the framework.
 
 ## Server Metadata
 
@@ -196,14 +297,15 @@ By default, `ServerSettings()` uses:
 ```python
 ServerSettings(
     name="pymcp-kit",
-    version="0.1.0",
+    version="0.2.0",
 )
 ```
 
 Those defaults flow into both:
 
 - the HTTP root payload returned from `GET /`
-- `initialize.result.serverInfo`
+- `initialize.result.serverInfo` for session-based revisions
+- `server/discover.result.serverInfo` for draft stateless revisions
 
 ## Current Non-Goals
 

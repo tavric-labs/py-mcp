@@ -83,12 +83,43 @@ app = create_app(
 
 The HTTP transport is mounted at `/mcp`. For local-process integrations, use `run_stdio_server(app)`.
 
+Stable MCP revisions are enabled by default. To build against the draft
+stateless revision, opt in explicitly:
+
+```python
+app = create_app(protocol_mode="draft")  # 2026-07-28 only
+app = create_app(protocol_mode="dual")   # draft plus stable clients
+```
+
+Draft extension capabilities are advertised under the spec `extensions` object.
+Built-in task support becomes `extensions["io.modelcontextprotocol/tasks"]` for
+the draft revision, and additional namespaced extensions can be supplied with
+`CapabilitySettings(extensions={...})`.
+
+Official extension capability advertisement is opt-in:
+
+```python
+from pymcp import CapabilitySettings, ServerSettings, create_app
+
+app = create_app(
+    server_settings=ServerSettings(
+        protocol_mode="draft",
+        capabilities=CapabilitySettings(
+            mcp_apps_enabled=True,
+            oauth_client_credentials_enabled=True,
+            enterprise_managed_authorization_enabled=True,
+        ),
+    )
+)
+```
+
 Hosted documentation is built from `docs/` with MkDocs Material and published to GitHub Pages.
 
 ## Features
 
 - Streamable HTTP transport for networked MCP servers
 - Stdio transport for local-process MCP hosts
+- Opt-in draft `2026-07-28` stateless protocol support with `server/discover` and namespaced extensions
 - Tool, prompt, and resource registries, including parameterized resource templates
 - Roots, resource subscriptions, and app-scoped session lifecycle
 - Task-aware tool execution with progress, cancellation, and result polling
@@ -107,6 +138,7 @@ Server-side JSON-RPC methods and notifications implemented by `pymcp-kit`:
 - `ping`
 - `notifications/initialized`
 - `notifications/cancelled`
+- `server/discover` (draft `2026-07-28`, when enabled)
 
 ### Tools
 

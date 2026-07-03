@@ -29,6 +29,35 @@ app = create_app(
 
 With `require_authn=True`, unauthenticated requests receive `401`.
 
+By default, the `WWW-Authenticate` challenge derives `resource_metadata` from the inbound request. If your deployment needs a public URL that differs from the request URL, set `resource_metadata_url` on `OAuthProtectedResourceConfig`.
+
+## Token Introspection
+
+`TokenIntrospectionAuthenticator` validates each Bearer token against a remote introspection endpoint and builds the request principal from the returned claims:
+
+```python
+from pymcp import create_app
+from pymcp.security import TokenIntrospectionAuthenticator
+
+
+app = create_app(
+    authn=TokenIntrospectionAuthenticator(
+        "https://auth.example.com/oauth2/introspect",
+        client_id="pymcp-server",
+        client_secret="super-secret",
+        expected_audience="mcp-api",
+        expected_resource="https://mcp.example.com/test-mcp",
+        expected_issuer="https://auth.example.com",
+    ),
+    require_authn=True,
+)
+```
+
+Use this when your deployment validates opaque access tokens through an authorization server or gateway instead of local JWT verification.
+Set `expected_audience` and/or `expected_resource` to the public MCP resource URI or audience your authorization server issues tokens for.
+
+Access tokens in the URI query string are rejected by the HTTP auth middleware.
+
 ## Rule-Based Authorization
 
 `RuleBasedAuthorizer` evaluates ordered allow/deny rules:

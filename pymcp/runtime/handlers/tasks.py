@@ -160,6 +160,82 @@ async def handle_tasks_cancel(ctx: DispatchContext) -> DispatchResult:
     return make_result(200, json_response=True, payload=payload)
 
 
+@rpc_method("tasks/update")
+async def handle_tasks_update(ctx: DispatchContext) -> DispatchResult:
+    if not ctx.supports("tasks"):
+        payload = ctx.payloads().error(ctx.rpc_id, MCPErrorCode.METHOD_NOT_FOUND, "tasks not supported")
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    params = ctx.data.get("params")
+    params_dict = params if isinstance(params, dict) else {}
+    raw_task_id = params_dict.get("taskId")
+    task_id = raw_task_id if isinstance(raw_task_id, str) and raw_task_id else None
+    input_responses = params_dict.get("inputResponses")
+    if task_id is None:
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            "Invalid params: missing taskId",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+    if not isinstance(input_responses, dict):
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            "Invalid params: inputResponses must be an object",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    record = await ctx.task_manager.get_task(task_id, ctx.session_id, principal=ctx.session.principal)
+    if not record:
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            "Failed to update task: Task not found",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+    if record.is_terminal():
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            f"Cannot update task: already in terminal status '{record.status.value}'",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    record = await ctx.task_manager.update_task_input_responses(
+        task_id,
+        ctx.session_id,
+        principal=ctx.session.principal,
+        input_responses=input_responses,
+    )
+    if not record:
+        payload = ctx.payloads().error(
+            ctx.rpc_id,
+            MCPErrorCode.INVALID_PARAMS,
+            "Failed to update task: Task not found",
+        )
+        await ctx.maybe_enqueue(payload)
+        return make_result(200, json_response=True, payload=payload)
+
+    await send_notification(
+        ctx.session,
+        {
+            "jsonrpc": "2.0",
+            "method": "notifications/tasks/status",
+            "params": record.to_wire(),
+        },
+    )
+
+    payload = ctx.payloads().success(ctx.rpc_id, {})
+    await ctx.maybe_enqueue(payload)
+    return make_result(200, json_response=True, payload=payload)
+
+
 @rpc_method("tasks/result")
 async def handle_tasks_result(ctx: DispatchContext) -> DispatchResult:
     if not ctx.supports("tasks"):

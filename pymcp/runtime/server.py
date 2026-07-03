@@ -57,6 +57,10 @@ def create_app(
         server_kwargs["website_url"] = kwargs["server_website_url"]
     if kwargs.get("server_icons") is not None:
         server_kwargs["icons"] = kwargs["server_icons"]
+    if kwargs.get("protocol_mode") is not None:
+        server_kwargs["protocol_mode"] = kwargs["protocol_mode"]
+    if kwargs.get("protocol_versions") is not None:
+        server_kwargs["protocol_versions"] = tuple(kwargs["protocol_versions"])
     app.state.server_settings = server_settings or ServerSettings(**server_kwargs)
     app.state.registry_manager = RegistryManager()
     app.state.registry_manager.copy_from_global_registries(

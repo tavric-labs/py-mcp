@@ -7,6 +7,15 @@ from typing import TYPE_CHECKING, Any, Protocol, cast
 
 from fastapi import FastAPI
 
+from ..protocol.extensions import (
+    MCP_APPS_UI,
+    MCP_ENTERPRISE_MANAGED_AUTHORIZATION,
+    MCP_OAUTH_CLIENT_CREDENTIALS,
+    MCP_TASKS,
+    extension_for_capability_feature,
+    has_extension,
+)
+from ..protocol.revisions import ProtocolRevision
 from ..settings import CapabilitySettings
 
 if TYPE_CHECKING:
@@ -116,6 +125,73 @@ class ServerExperimentalCapability:
         return {"experimental": dict(self.features)}
 
 
+def _ensure_extensions(capabilities: JSONObject) -> JSONObject:
+    extensions = capabilities.setdefault("extensions", {})
+    if not isinstance(extensions, dict):
+        extensions = {}
+        capabilities["extensions"] = extensions
+    return cast(JSONObject, extensions)
+
+
+def _configured_extensions(settings: CapabilitySettings) -> JSONObject:
+    extensions: JSONObject = {}
+    if settings.mcp_apps_enabled:
+        extensions[MCP_APPS_UI] = (
+            dict(settings.mcp_apps_settings)
+            if settings.mcp_apps_settings is not None
+            else {"mimeTypes": list(settings.mcp_apps_mime_types)}
+        )
+    if settings.oauth_client_credentials_enabled:
+        extensions[MCP_OAUTH_CLIENT_CREDENTIALS] = (
+            dict(settings.oauth_client_credentials_settings)
+            if settings.oauth_client_credentials_settings is not None
+            else {}
+        )
+    if settings.enterprise_managed_authorization_enabled:
+        extensions[MCP_ENTERPRISE_MANAGED_AUTHORIZATION] = (
+            dict(settings.enterprise_managed_authorization_settings)
+            if settings.enterprise_managed_authorization_settings is not None
+            else {}
+        )
+    if settings.extensions:
+        extensions.update(settings.extensions)
+    return extensions
+
+
+def apply_protocol_revision_capabilities(
+    capabilities: JSONObject,
+    settings: CapabilitySettings,
+    protocol_revision: ProtocolRevision | None,
+) -> JSONObject:
+    """Apply revision-specific capability shape.
+
+    Stable revisions advertise capabilities at their historical top-level
+    locations. Draft revisions move draft extension capabilities under the
+    spec-defined ``extensions`` object.
+    """
+    if protocol_revision is not None and protocol_revision.stateless:
+        resources_caps = capabilities.get("resources")
+        if isinstance(resources_caps, dict):
+            resources_caps.pop("subscribe", None)
+
+    if protocol_revision is not None and protocol_revision.extensions:
+        extensions = _ensure_extensions(capabilities)
+        for extension in protocol_revision.extensions:
+            if extension.feature == "tasks":
+                tasks = capabilities.pop("tasks", None)
+                if isinstance(tasks, dict):
+                    extensions[extension.name] = tasks
+
+    configured_extensions = _configured_extensions(settings)
+    if configured_extensions:
+        extensions = _ensure_extensions(capabilities)
+        extensions.update(configured_extensions)
+
+    if not capabilities.get("extensions"):
+        capabilities.pop("extensions", None)
+    return capabilities
+
+
 # ---------------------------------------------------------------------------
 # build_capabilities – assembles the *server* capability declaration
 # ---------------------------------------------------------------------------
@@ -126,6 +202,8 @@ def build_capabilities(
     tools: "ToolRegistry",
     prompts: "PromptRegistry",
     resources: "ResourceRegistry",
+    *,
+    protocol_revision: ProtocolRevision | None = None,
 ) -> JSONObject:
     """Build the server capability declaration for the current registries/settings.
 
@@ -161,7 +239,7 @@ def build_capabilities(
     capabilities: JSONObject = {}
     for provider in providers:
         capabilities.update(provider.get_capabilities())
-    return capabilities
+    return apply_protocol_revision_capabilities(capabilities, settings, protocol_revision)
 
 
 # ---------------------------------------------------------------------------
@@ -177,9 +255,11 @@ class ServerCapabilities:
         *,
         app: FastAPI | None = None,
         capabilities: JSONObject | None = None,
+        protocol_revision: ProtocolRevision | None = None,
     ) -> None:
         self._app = app
         self._capabilities = capabilities
+        self._protocol_revision = protocol_revision
 
     def get_capabilities(self) -> JSONObject:
         if self._capabilities is not None:
@@ -198,6 +278,7 @@ class ServerCapabilities:
             registry_manager.tool_registry,
             registry_manager.prompt_registry,
             registry_manager.resource_registry,
+            protocol_revision=self._protocol_revision,
         )
 
 
@@ -226,11 +307,19 @@ class ClientCapabilities:
         gating).
         """
         if feature == "tasks":
-            return "tasks" in self.capabilities
+            if "tasks" in self.capabilities:
+                return True
+            return has_extension(self.capabilities, MCP_TASKS)
+        extension_name = extension_for_capability_feature(feature)
+        if extension_name is not None:
+            return has_extension(self.capabilities, extension_name)
         return feature in self.capabilities
 
     def get_capabilities(self) -> JSONObject:
         return dict(self.capabilities)
+
+    def supports_extension(self, extension_name: str) -> bool:
+        return has_extension(self.capabilities, extension_name)
 
     # -- roots -----------------------------------------------------------
 

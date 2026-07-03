@@ -1,6 +1,12 @@
 """Tests for ClientCapabilities parsing and accessor methods."""
 
 from pymcp.capabilities.registry import ClientCapabilities
+from pymcp.protocol.extensions import (
+    MCP_APPS_UI,
+    MCP_ENTERPRISE_MANAGED_AUTHORIZATION,
+    MCP_OAUTH_CLIENT_CREDENTIALS,
+    MCP_TASKS,
+)
 
 
 class TestRoots:
@@ -116,6 +122,25 @@ class TestGenericSupports:
     def test_supports_tasks_when_present(self):
         cc = ClientCapabilities({"tasks": {}})
         assert cc.supports("tasks")
+
+    def test_supports_tasks_when_declared_as_extension(self):
+        cc = ClientCapabilities({"extensions": {MCP_TASKS: {}}})
+        assert cc.supports("tasks")
+
+    def test_supports_official_extension_features(self):
+        cc = ClientCapabilities(
+            {
+                "extensions": {
+                    MCP_APPS_UI: {},
+                    MCP_OAUTH_CLIENT_CREDENTIALS: {},
+                    MCP_ENTERPRISE_MANAGED_AUTHORIZATION: {},
+                }
+            }
+        )
+        assert cc.supports("ui")
+        assert cc.supports("oauth_client_credentials")
+        assert cc.supports("enterprise_managed_authorization")
+        assert cc.supports_extension(MCP_APPS_UI)
 
     def test_supports_arbitrary_feature_when_present(self):
         cc = ClientCapabilities({"roots": {}})
