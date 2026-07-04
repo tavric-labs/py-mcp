@@ -210,7 +210,7 @@ run_stdio_server(app)
 
 ## Middleware
 
-Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, auth hooks, and custom ASGI middleware, then pass it into `create_app()`. See the hosted [Middleware guide](https://agent-hellboy.github.io/py-mcp/middleware/) for examples.
+Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, auth hooks, and custom ASGI middleware, then pass it into `create_app()`. See the hosted [Middleware page](https://agent-hellboy.github.io/py-mcp/middleware/) for examples.
 
 ## Scope
 

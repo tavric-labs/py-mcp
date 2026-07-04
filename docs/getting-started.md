@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide covers the public surface that ships in `pymcp-kit` today.
+This page covers the public surface that ships in `pymcp-kit` today.
 
 ## Installation
 
@@ -189,7 +189,7 @@ Resources can be listed, read, subscribed to, and unsubscribed from through the 
 
 See `example/run_server.py` in the repository root for a complete example with tools, prompts, resources, middleware, and server settings.
 
-## Next Guides
+## Read Next
 
 - [Middleware](middleware.md)
 - [Tasks](tasks.md)
