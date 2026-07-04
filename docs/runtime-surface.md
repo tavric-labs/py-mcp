@@ -297,7 +297,7 @@ By default, `ServerSettings()` uses:
 ```python
 ServerSettings(
     name="pymcp-kit",
-    version="0.2.0",
+    version="0.3.0",
 )
 ```
 

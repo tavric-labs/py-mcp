@@ -3,6 +3,7 @@
 [![Python CI](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
 [![MCP Conformance-v2025-11-25](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
+[![MCP Protocol Revisions](https://img.shields.io/badge/MCP%20revisions-5%20supported-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/runtime-surface/#supported-protocol-versions)
 [![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
 [![Docs](https://img.shields.io/badge/docs-github%20pages-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/)
@@ -11,7 +12,7 @@
 
 [Documentation](https://agent-hellboy.github.io/py-mcp/) | [Quick Start](https://agent-hellboy.github.io/py-mcp/getting-started/) | [Tasks](https://agent-hellboy.github.io/py-mcp/tasks/) | [Security](https://agent-hellboy.github.io/py-mcp/security/) | [Middleware](https://agent-hellboy.github.io/py-mcp/middleware/)
 
-`PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the built-in transport surface small, supports Streamable HTTP and stdio, and ships app-scoped registries, roots, tasks, and optional auth hooks without pulling in a larger framework.
+`PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the built-in transport surface small, supports Streamable HTTP and stdio, and ships app-scoped registries, roots, tasks, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support without pulling in a larger framework.
 
 ## Quick Start
 
@@ -123,7 +124,7 @@ Hosted documentation is built from `docs/` with MkDocs Material and published to
 - Tool, prompt, and resource registries, including parameterized resource templates
 - Roots, resource subscriptions, and app-scoped session lifecycle
 - Task-aware tool execution with progress, cancellation, and result polling
-- Optional authentication and authorization hooks
+- Optional authentication and authorization hooks with OAuth protected-resource metadata discovery
 - Capability advertising through `CapabilitySettings`
 - FastAPI middleware integration through `MiddlewareConfig`
 - Small surface area focused on practical MCP server builds
@@ -138,7 +139,7 @@ Server-side JSON-RPC methods and notifications implemented by `pymcp-kit`:
 - `ping`
 - `notifications/initialized`
 - `notifications/cancelled`
-- `server/discover` (draft `2026-07-28`, when enabled)
+- `server/discover` (draft `2026-07-28`, when `protocol_mode="draft"` or `"dual"` is enabled)
 
 ### Tools
 

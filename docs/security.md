@@ -58,6 +58,37 @@ Set `expected_audience` and/or `expected_resource` to the public MCP resource UR
 
 Access tokens in the URI query string are rejected by the HTTP auth middleware.
 
+## OAuth Protected Resource Metadata
+
+Configure `OAuthProtectedResourceConfig` when clients should discover the MCP
+resource server metadata described by RFC 9728:
+
+```python
+from pymcp import create_app
+from pymcp.security import OAuthProtectedResourceConfig, TokenMapAuthenticator
+
+
+app = create_app(
+    authn=TokenMapAuthenticator({"secret-token": {"subject": "alice"}}),
+    require_authn=True,
+    oauth=OAuthProtectedResourceConfig(
+        authorization_servers=["https://auth.example.com"],
+        resource="https://mcp.example.com/mcp",
+        scopes_supported=["tools:read", "tools:call"],
+        bearer_methods_supported=["header"],
+    ),
+)
+```
+
+The HTTP transport serves metadata at:
+
+- `/.well-known/oauth-protected-resource`
+- `/.well-known/oauth-protected-resource/mcp`
+
+Authentication failures include a Bearer `WWW-Authenticate` challenge with a
+`resource_metadata` URL. Set `resource_metadata_url` when the public URL differs
+from the inbound request URL behind a proxy or gateway.
+
 ## Rule-Based Authorization
 
 `RuleBasedAuthorizer` evaluates ordered allow/deny rules:

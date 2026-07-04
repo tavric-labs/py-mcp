@@ -80,3 +80,4 @@ nav:
       - Runtime Surface: runtime-surface.md
   - Development:
       - Docs Deployment: deployment.md
+      - Release Process: release.md

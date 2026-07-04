@@ -2,7 +2,7 @@
 
 <div class="hero" markdown>
 
-Capability-first MCP server tooling for FastAPI. `pymcp-kit` keeps the built-in transport surface small, exposes app-scoped registries, and ships the MCP features you typically need first: tools, prompts, resources, roots, task-aware execution, and optional auth hooks.
+Capability-first MCP server tooling for FastAPI. `pymcp-kit` keeps the built-in transport surface small, exposes app-scoped registries, and ships the MCP features you typically need first: tools, prompts, resources, roots, task-aware execution, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support.
 
 <div class="hero-actions" markdown>
 [Get Started](getting-started.md){ .md-button .md-button--primary }
@@ -41,7 +41,7 @@ Opt tools into task execution, emit progress, request user input, support cancel
 
 ### Security when you need it
 
-Add bearer-token authentication and rule-based authorization without turning the package into a large framework.
+Add bearer-token authentication, rule-based authorization, token introspection, and OAuth protected-resource metadata without turning the package into a large framework.
 
 </div>
 
@@ -65,10 +65,11 @@ pip install pymcp-kit
 
 - Streamable HTTP mounted at `/mcp`
 - Stdio transport through `run_stdio_server(app)`
+- Stable MCP revisions by default, with opt-in draft `2026-07-28` stateless support
 - Tool, prompt, and resource registries
 - Roots and resource subscriptions
 - Task-aware tool execution with progress, cancellation, and elicitation
-- Optional authentication and authorization hooks
+- Optional authentication, authorization, and OAuth protected-resource metadata hooks
 
 ## Main Protocol Surface
 
@@ -78,10 +79,13 @@ pip install pymcp-kit
 - Resources: `resources/list`, `resources/read`, `resources/subscribe`, `resources/unsubscribe`
 - Roots: `roots/list`
 - Tasks: `tasks/list`, `tasks/get`, `tasks/cancel`, `tasks/result`
+- Draft discovery: `server/discover` when draft mode is enabled
 
 ## Read Next
 
 - [Getting Started](getting-started.md): installation, the basic app factory flow, and the built-in transports.
 - [Tasks](tasks.md): task-aware tool execution, progress, cancellation, and result polling.
 - [Security](security.md): bearer tokens, rule-based authorization, and capability filtering.
+- [Runtime Surface](runtime-surface.md): protocol revisions, draft stateless flow, endpoints, and capability settings.
 - [Docs Deployment](deployment.md): how this site is built and published with GitHub Pages.
+- [Release Process](release.md): version bump, tag, GitHub Release, and PyPI publishing flow.
