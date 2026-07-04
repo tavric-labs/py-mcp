@@ -2,6 +2,50 @@
 
 `pymcp-kit` supports task-aware tool execution, result polling, cancellation, and progress reporting. Tasks are enabled by default at the capability level, but each tool still decides whether task augmentation is allowed.
 
+## Task Execution Flow
+
+Task-aware tools can return immediately with task metadata, continue in the
+background, emit status/progress notifications, and expose the final structured
+result through `tasks/result`:
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant Runtime
+    participant Engine as Task Engine
+    participant Tool
+
+    Client->>Runtime: tools/call<br/>_meta.task requested
+    Runtime->>Runtime: verify task capability and tool execution policy
+    Runtime->>Engine: create task
+    Engine-->>Client: task accepted / pending response
+    Engine->>Tool: run tool with task_context and cancel_token
+    Tool->>Engine: task_context.send_progress(...)
+    Engine-->>Client: notifications/progress
+    Engine-->>Client: notifications/tasks/status
+
+    alt user input required
+        Tool->>Engine: task_context.require_input(...)
+        Engine-->>Client: notifications/tasks/status waiting
+        Client->>Runtime: elicitation response
+        Runtime->>Engine: resume task
+    end
+
+    alt client cancels
+        Client->>Runtime: tasks/cancel
+        Runtime->>Engine: cancel task
+        Engine->>Tool: cancel_token trips
+        Engine-->>Client: notifications/tasks/status cancelled
+    else tool completes
+        Tool-->>Engine: content and structuredContent
+        Engine-->>Client: notifications/tasks/status complete
+        Client->>Runtime: tasks/result
+        Runtime->>Engine: load stored result
+        Engine-->>Client: final MCP result shape
+    end
+```
+
 ## Opt A Tool Into Tasks
 
 Use `execution.taskSupport` on the tool definition:

@@ -2,6 +2,50 @@
 
 `pymcp-kit` ships optional authentication and authorization hooks. They are off by default and are activated through `create_app(...)` or `MiddlewareConfig(...)`.
 
+## Auth Request Flow
+
+When auth is enabled, the HTTP middleware authenticates the Bearer token before
+the JSON-RPC dispatcher runs. Authorization then evaluates the resolved MCP
+method, tool name, resource URI, prompt name, or task ID before the handler is
+called.
+
+```mermaid
+sequenceDiagram
+    autonumber
+    participant Client
+    participant HTTP as HTTP Transport
+    participant Authn as Authenticator
+    participant Authz as Authorizer
+    participant Dispatcher
+    participant Handler
+
+    alt no Bearer token and require_authn=True
+        Client->>HTTP: POST /mcp without Authorization
+        HTTP-->>Client: 401 Bearer challenge<br/>resource_metadata URL
+        Client->>HTTP: GET /.well-known/oauth-protected-resource
+        HTTP-->>Client: protected resource metadata<br/>authorization_servers and scopes
+    else Bearer token supplied
+        Client->>HTTP: POST /mcp<br/>Authorization: Bearer token
+        HTTP->>Authn: authenticate(request)
+        alt TokenMapAuthenticator
+            Authn-->>HTTP: Principal from local token map
+        else TokenIntrospectionAuthenticator
+            Authn->>Authn: POST token to introspection endpoint
+            Authn-->>HTTP: Principal from active token claims
+        end
+        HTTP->>Dispatcher: dispatch with principal
+        Dispatcher->>Authz: authorize(principal, AuthzRequest)
+        alt request allowed
+            Authz-->>Dispatcher: allow
+            Dispatcher->>Handler: run MCP method handler
+            Handler-->>Client: JSON-RPC result
+        else request denied
+            Authz-->>Dispatcher: AuthorizationError
+            Dispatcher-->>Client: JSON-RPC error or 403/insufficient_scope challenge
+        end
+    end
+```
+
 ## Bearer Token Authentication
 
 `TokenMapAuthenticator` maps static Bearer tokens to `Principal` objects:
