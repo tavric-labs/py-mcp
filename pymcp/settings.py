@@ -57,7 +57,7 @@ class CapabilitySettings:
 @dataclass(slots=True)
 class ServerSettings:
     name: str = "pymcp-kit"
-    version: str = "0.2.0"
+    version: str = "0.3.0"
     protocol_mode: ProtocolMode = DEFAULT_PROTOCOL_MODE
     protocol_versions: tuple[str, ...] | None = None
     initializable_protocol_versions: tuple[str, ...] | None = None
