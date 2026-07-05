@@ -61,6 +61,26 @@ Passes the official [MCP conformance suite](https://github.com/modelcontextproto
 pip install pymcp-kit
 ```
 
+## How It Fits Together
+
+`create_app()` snapshots the registries into an isolated runtime, mounts the
+Streamable HTTP transport at `/mcp`, and routes every request through the same
+dispatch pipeline that the stdio transport uses:
+
+```mermaid
+flowchart LR
+    C1[MCP client] -->|Streamable HTTP /mcp| T[Transport layer]
+    C2[MCP host] -->|stdio| T
+    T --> SM[Session manager]
+    T --> D[Dispatcher]
+    D --> G[Middleware gates<br/>error boundary, init,<br/>capability, authorization]
+    G --> H[Method handlers<br/>tools, prompts, resources,<br/>roots, tasks]
+    H --> R[App-scoped registries]
+    H --> E[Task engine]
+    SEC[Security hooks<br/>authn, authz,<br/>OAuth metadata] -.-> T
+    SEC -.-> D
+```
+
 ## What Ships Today
 
 - Streamable HTTP mounted at `/mcp`

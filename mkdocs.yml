@@ -45,10 +45,6 @@ extra:
 extra_css:
   - stylesheets/extra.css
 
-extra_javascript:
-  - https://unpkg.com/mermaid@11/dist/mermaid.min.js
-  - javascripts/mermaid-init.js
-
 markdown_extensions:
   - admonition
   - attr_list
@@ -68,7 +64,7 @@ markdown_extensions:
       custom_fences:
         - name: mermaid
           class: mermaid
-          format: !!python/name:pymdownx.superfences.fence_div_format
+          format: !!python/name:pymdownx.superfences.fence_code_format
   - pymdownx.tabbed:
       alternate_style: true
 
@@ -89,3 +85,4 @@ nav:
   - Development:
       - Docs Deployment: deployment.md
       - Release Process: release.md
+      - Documentation Plan: docs-plan.md
