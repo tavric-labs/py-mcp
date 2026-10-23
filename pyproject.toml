@@ -22,9 +22,9 @@ dependencies = [
 license = {text = "MIT"}
 
 [project.urls]
-Homepage = "https://github.com/Agent-Hellboy/py-mcp"
-Documentation = "https://agent-hellboy.github.io/py-mcp/"
-Repository = "https://github.com/Agent-Hellboy/py-mcp"
+Homepage = "https://py-mcp.tavric-labs.net/"
+Documentation = "https://py-mcp.tavric-labs.net/"
+Repository = "https://github.com/tavric-labs/py-mcp"
 
 [project.optional-dependencies]
 docs = [

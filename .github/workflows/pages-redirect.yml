@@ -1,0 +1,51 @@
+name: Redirect legacy GitHub Pages
+
+# One-off: replaces the old GitHub Pages site with a redirect to
+# https://py-mcp.tavric-labs.net/, preserving the page path.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages-redirect
+  cancel-in-progress: false
+
+jobs:
+  redirect:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Build redirect pages
+        run: |
+          mkdir site
+          cat > site/index.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>PyMCP Kit docs have moved</title>
+          <link rel="canonical" href="https://py-mcp.tavric-labs.net/">
+          <meta http-equiv="refresh" content="0; url=https://py-mcp.tavric-labs.net/">
+          <p>The PyMCP Kit documentation has moved to <a href="https://py-mcp.tavric-labs.net/">py-mcp.tavric-labs.net</a>.</p>
+          HTML
+          cat > site/404.html <<'HTML'
+          <!doctype html>
+          <meta charset="utf-8">
+          <title>PyMCP Kit docs have moved</title>
+          <script>
+            location.replace('https://py-mcp.tavric-labs.net' + location.pathname.replace(/^\/py-mcp/, '') + location.search + location.hash);
+          </script>
+          <p>The PyMCP Kit documentation has moved to <a href="https://py-mcp.tavric-labs.net/">py-mcp.tavric-labs.net</a>.</p>
+          HTML
+          touch site/.nojekyll
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

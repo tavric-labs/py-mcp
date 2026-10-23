@@ -1,8 +1,8 @@
 # PyMCP Kit
 
-[![Python CI](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml)
+[![Python CI](https://github.com/tavric-labs/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/tavric-labs/py-mcp/actions/workflows/python-ci.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
-[![MCP Conformance-v2025-11-25](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
+[![MCP Conformance-v2025-11-25](https://github.com/tavric-labs/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
 [![MCP Protocol Revisions](https://img.shields.io/static/v1?label=MCP%20revisions&message=2025-11-25%2C%202025-06-18%2C%202025-03-26%2C%202024-11-05%2C%202026-07-28&color=0f766e)](https://py-mcp.tavric-labs.net/runtime-surface/#supported-protocol-versions)
 [![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
