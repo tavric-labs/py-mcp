@@ -12,3 +12,5 @@ explore
 .tox/
 py_sse_mcp.egg-info/
 plan.md
+# MkDocs build output
+site/

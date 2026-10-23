@@ -2,7 +2,7 @@
 
 <div class="hero" markdown>
 
-Capability-first MCP server tooling for FastAPI. `pymcp-kit` keeps the built-in transport surface small, exposes app-scoped registries, and ships the MCP features you typically need first: tools, prompts, resources, roots, task-aware execution, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support.
+An opinionated implementation of the Model Context Protocol for FastAPI. The spec leaves room for many designs; `pymcp-kit` picks one: a small built-in transport surface, app-scoped registries, and the MCP features you typically need first: tools, prompts, resources, roots, task-aware execution, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support.
 
 <div class="hero-actions" markdown>
 [Get Started](getting-started.md){ .md-button .md-button--primary }
@@ -54,6 +54,16 @@ Passes the official [MCP conformance suite](https://github.com/modelcontextproto
 </div>
 
 </div>
+
+## Opinionated by design
+
+PyMCP Kit follows the MCP specification, and makes the choices the spec leaves open:
+
+- **Two transports, nothing more.** Streamable HTTP at `/mcp` for networked clients and stdio for subprocess hosts.
+- **Registries are app-scoped.** Register tools, prompts, and resources globally, and `create_app()` snapshots them into an isolated runtime.
+- **Stable by default, draft by opt-in.** Stable MCP revisions are served by default; the draft `2026-07-28` stateless flow is something you enable.
+- **Security is a hook, not a framework.** Authentication, authorization, and OAuth protected-resource metadata are optional hooks you add when you need them.
+- **Conformance is checked, not claimed.** The official MCP conformance suite runs in CI on every change.
 
 ## Quick Install
 

@@ -3,14 +3,14 @@
 [![Python CI](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml/badge.svg)](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/python-ci.yml)
 [![codecov](https://codecov.io/gh/Agent-Hellboy/py-mcp/graph/badge.svg)](https://codecov.io/gh/Agent-Hellboy/py-mcp)
 [![MCP Conformance-v2025-11-25](https://github.com/Agent-Hellboy/py-mcp/actions/workflows/conformance.yml/badge.svg)](https://modelcontextprotocol.io/specification/2025-11-25)
-[![MCP Protocol Revisions](https://img.shields.io/static/v1?label=MCP%20revisions&message=2025-11-25%2C%202025-06-18%2C%202025-03-26%2C%202024-11-05%2C%202026-07-28&color=0f766e)](https://agent-hellboy.github.io/py-mcp/runtime-surface/#supported-protocol-versions)
+[![MCP Protocol Revisions](https://img.shields.io/static/v1?label=MCP%20revisions&message=2025-11-25%2C%202025-06-18%2C%202025-03-26%2C%202024-11-05%2C%202026-07-28&color=0f766e)](https://py-mcp.tavric-labs.net/runtime-surface/#supported-protocol-versions)
 [![PyPI - Version](https://img.shields.io/pypi/v/pymcp-kit.svg)](https://pypi.org/project/pymcp-kit/)
 [![PyPI Downloads](https://static.pepy.tech/badge/pymcp-kit)](https://pepy.tech/projects/pymcp-kit)
-[![Docs](https://img.shields.io/badge/docs-github%20pages-0f766e.svg)](https://agent-hellboy.github.io/py-mcp/)
+[![Docs](https://img.shields.io/badge/docs-py--mcp.tavric--labs.net-0f766e.svg)](https://py-mcp.tavric-labs.net/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Python 3.11+](https://img.shields.io/badge/python-3.11%2B-blue.svg)](https://www.python.org/downloads/)
 
-[Documentation](https://agent-hellboy.github.io/py-mcp/) | [Quick Start](https://agent-hellboy.github.io/py-mcp/getting-started/) | [Tasks](https://agent-hellboy.github.io/py-mcp/tasks/) | [Security](https://agent-hellboy.github.io/py-mcp/security/) | [Middleware](https://agent-hellboy.github.io/py-mcp/middleware/)
+[Documentation](https://py-mcp.tavric-labs.net/) | [Quick Start](https://py-mcp.tavric-labs.net/getting-started/) | [Tasks](https://py-mcp.tavric-labs.net/tasks/) | [Security](https://py-mcp.tavric-labs.net/security/) | [Middleware](https://py-mcp.tavric-labs.net/middleware/)
 
 `PyMCP Kit` is a capability-first MCP server toolkit for FastAPI. It keeps the built-in transport surface small, supports Streamable HTTP and stdio, and ships app-scoped registries, roots, tasks, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support without pulling in a larger framework.
 
@@ -186,7 +186,7 @@ These are not inbound server handlers; the toolkit sends requests or notificatio
 
 List operations support optional `cursor` / `nextCursor` pagination. Page size is controlled by `CapabilitySettings.list_page_size` (default `50`).
 
-See [Runtime Surface](https://agent-hellboy.github.io/py-mcp/runtime-surface/) for protocol versions, HTTP endpoints, and capability settings.
+See [Runtime Surface](https://py-mcp.tavric-labs.net/runtime-surface/) for protocol versions, HTTP endpoints, and capability settings.
 
 ## Example Server
 
@@ -210,7 +210,7 @@ run_stdio_server(app)
 
 ## Middleware
 
-Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, auth hooks, and custom ASGI middleware, then pass it into `create_app()`. See the hosted [Middleware page](https://agent-hellboy.github.io/py-mcp/middleware/) for examples.
+Middleware stays separate from capability registration. Use `MiddlewareConfig` to control CORS, compression, logging, auth hooks, and custom ASGI middleware, then pass it into `create_app()`. See the hosted [Middleware page](https://py-mcp.tavric-labs.net/middleware/) for examples.
 
 ## Scope
 
