@@ -22,7 +22,7 @@ Ordered by expected reader value.
 
 ### Phase 1 — Reference completeness
 
-- **API reference.** Generate from docstrings with `mkdocstrings[python]` so
+- **API reference.** Generate from docstrings so
   `create_app()`, registries, `ServerSettings`, task helpers, and the security
   types have a browsable reference instead of living only in guide prose.
 - **Settings reference.** A dedicated page for `ServerSettings` and
@@ -52,14 +52,18 @@ Ordered by expected reader value.
 
 ## Conventions
 
-- Every page must be reachable from `nav` in `mkdocs.yml`; builds run with
-  `--strict`, so broken links and orphaned snippets fail CI.
-- Diagrams are Mermaid fenced blocks (` ```mermaid `) rendered through
-  `pymdownx.superfences` with `fence_code_format` and Material's built-in
-  Mermaid support. Do **not** switch back to `fence_div_format` or add a
-  custom Mermaid loader script: `fence_div_format` emits a plain `<div>`,
-  the `minify` plugin collapses the newlines inside it, and Mermaid cannot
-  parse the flattened source.
+- Every page must be reachable from `nav` or `sidebar` in
+  `docs/.vitepress/config.mjs`; the build fails on dead links, so broken
+  links fail CI.
+- Pages are served at `/<page>/` (the URLs the project has always used), via
+  the `rewrites` map in `docs/.vitepress/config.mjs`. A new page needs an
+  entry there, a sidebar entry, and root-absolute links such as `/tasks/`.
+- Diagrams are Mermaid fenced blocks (` ```mermaid `), rendered in the
+  browser by the shared theme (light and dark, click to enlarge). Do not
+  add a custom Mermaid loader script.
+- Design and layout come from the shared
+  [`@tavric-labs/docs-theme`](https://github.com/tavric-labs/docs-theme)
+  package. Change the look there, not in this repository.
 - Prefer one flow diagram plus focused code examples per guide over long
   prose; match the structure of `tasks.md` and `security.md`.
 - Keep `README.md` links pointing at the hosted pages listed here.

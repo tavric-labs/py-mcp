@@ -1,59 +1,61 @@
-# PyMCP Kit
+---
+layout: home
+title: Documentation
+hero:
+  name: PyMCP Kit
+  text: An opinionated MCP implementation for FastAPI
+  tagline: Streamable HTTP and stdio, app-scoped registries, task-aware tools and optional security hooks, without a large framework.
+  image:
+    src: /logo.svg
+    alt: PyMCP Kit
+  actions:
+    - theme: brand
+      text: Get Started
+      link: /getting-started/
+    - theme: alt
+      text: Runtime Surface
+      link: /runtime-surface/
+    - theme: alt
+      text: View on GitHub
+      link: https://github.com/tavric-labs/py-mcp
+features:
+  - icon: 🔌
+    title: Small transport surface
+    details: Use Streamable HTTP at /mcp for networked clients and stdio for subprocess-based MCP hosts.
+    link: /getting-started/
+    linkText: Getting started
+  - icon: 🗂️
+    title: App-scoped registries
+    details: Register tools, prompts, and resources globally for simple setups, then let create_app() snapshot them into an isolated app runtime.
+    link: /getting-started/
+    linkText: App factory
+  - icon: ⏱️
+    title: Tasks that stay useful
+    details: Opt tools into task execution, emit progress, request user input, support cancellation, and return results without flattening structured payloads.
+    link: /tasks/
+    linkText: Tasks
+  - icon: 🛡️
+    title: Security when you need it
+    details: Add bearer-token authentication, rule-based authorization, token introspection, and OAuth protected-resource metadata without turning the package into a large framework.
+    link: /security/
+    linkText: Security
+  - icon: 🧭
+    title: Stable by default, draft by opt-in
+    details: Stable MCP revisions are served by default; the draft 2026-07-28 stateless flow is something you enable.
+    link: /runtime-surface/
+    linkText: Runtime surface
+  - icon: ✅
+    title: Spec conformant
+    details: Passes the official MCP conformance suite in full against the 2025-11-25 spec, verified in CI on every change.
+    link: https://github.com/modelcontextprotocol/conformance
+    linkText: Conformance suite
+---
 
-<div class="hero" markdown>
+<div class="home-section">
 
 An opinionated implementation of the Model Context Protocol for FastAPI. The spec leaves room for many designs; `pymcp-kit` picks one: a small built-in transport surface, app-scoped registries, and the MCP features you typically need first: tools, prompts, resources, roots, task-aware execution, optional auth hooks, OAuth protected-resource metadata, and opt-in draft MCP support.
 
-<div class="hero-actions" markdown>
-[Get Started](getting-started.md){ .md-button .md-button--primary }
-[Runtime Surface](runtime-surface.md){ .md-button }
-</div>
-
-</div>
-
-<div class="pymcp-grid" markdown>
-
-<div class="pymcp-card" markdown>
-
-### Small transport surface
-
-Use Streamable HTTP at `/mcp` for networked clients and stdio for subprocess-based MCP hosts.
-
-</div>
-
-<div class="pymcp-card" markdown>
-
-### App-scoped registries
-
-Register tools, prompts, and resources globally for simple setups, then let `create_app()` snapshot them into an isolated app runtime.
-
-</div>
-
-<div class="pymcp-card" markdown>
-
-### Tasks that stay useful
-
-Opt tools into task execution, emit progress, request user input, support cancellation, and return results without flattening structured payloads.
-
-</div>
-
-<div class="pymcp-card" markdown>
-
-### Security when you need it
-
-Add bearer-token authentication, rule-based authorization, token introspection, and OAuth protected-resource metadata without turning the package into a large framework.
-
-</div>
-
-<div class="pymcp-card" markdown>
-
-### Spec conformant
-
 Passes the official [MCP conformance suite](https://github.com/modelcontextprotocol/conformance) in full against the [2025-11-25 spec](https://modelcontextprotocol.io/specification/2025-11-25), verified in CI on every change.
-
-</div>
-
-</div>
 
 ## Opinionated by design
 
@@ -113,9 +115,11 @@ flowchart LR
 
 ## Read Next
 
-- [Getting Started](getting-started.md): installation, the basic app factory flow, and the built-in transports.
-- [Tasks](tasks.md): task-aware tool execution, progress, cancellation, and result polling.
-- [Security](security.md): bearer tokens, rule-based authorization, and capability filtering.
-- [Runtime Surface](runtime-surface.md): protocol revisions, draft stateless flow, endpoints, and capability settings.
-- [Docs Deployment](deployment.md): how this site is built and published with GitHub Pages.
-- [Release Process](release.md): version bump, tag, GitHub Release, and PyPI publishing flow.
+- [Getting Started](getting-started/): installation, the basic app factory flow, and the built-in transports.
+- [Tasks](tasks/): task-aware tool execution, progress, cancellation, and result polling.
+- [Security](security/): bearer tokens, rule-based authorization, and capability filtering.
+- [Runtime Surface](runtime-surface/): protocol revisions, draft stateless flow, endpoints, and capability settings.
+- [Docs Deployment](deployment/): how this site is built and deployed.
+- [Release Process](release/): version bump, tag, GitHub Release, and PyPI publishing flow.
+
+</div>

@@ -13,7 +13,8 @@ distributions as release assets, and publishes to PyPI with `twine`.
 
 ```bash
 pytest
-mkdocs build --strict
+npm ci
+npm run docs:build
 ```
 
 ## Publish

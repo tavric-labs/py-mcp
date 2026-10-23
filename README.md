@@ -114,7 +114,7 @@ app = create_app(
 )
 ```
 
-Hosted documentation at https://py-mcp.tavric-labs.net/ is built from `docs/` with MkDocs Material and deployed from CI to the Tavric Labs docs host.
+Hosted documentation at https://py-mcp.tavric-labs.net/ is built from `docs/` with VitePress and the shared Tavric Labs docs theme, and deployed from CI to the Tavric Labs docs host.
 
 ## Features
 

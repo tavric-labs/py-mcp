@@ -16,10 +16,11 @@ For local development from this repository:
 pip install -e .
 ```
 
-If you want to work on the docs locally as well:
+To work on the docs locally as well (Node 22 or newer):
 
 ```bash
-pip install -e '.[docs]'
+npm ci
+npm run docs:dev
 ```
 
 ## Quick Start
@@ -191,7 +192,7 @@ See `example/run_server.py` in the repository root for a complete example with t
 
 ## Read Next
 
-- [Middleware](middleware.md)
-- [Tasks](tasks.md)
-- [Security](security.md)
-- [Runtime Surface](runtime-surface.md)
+- [Middleware](/middleware/)
+- [Tasks](/tasks/)
+- [Security](/security/)
+- [Runtime Surface](/runtime-surface/)

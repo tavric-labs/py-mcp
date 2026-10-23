@@ -1,0 +1,3 @@
+User-agent: *
+Allow: /
+Sitemap: https://py-mcp.tavric-labs.net/sitemap.xml

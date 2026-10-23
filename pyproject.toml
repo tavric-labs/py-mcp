@@ -26,14 +26,6 @@ Homepage = "https://py-mcp.tavric-labs.net/"
 Documentation = "https://py-mcp.tavric-labs.net/"
 Repository = "https://github.com/tavric-labs/py-mcp"
 
-[project.optional-dependencies]
-docs = [
-    "mkdocs>=1.6",
-    "mkdocs-material>=9.5",
-    "mkdocs-minify-plugin>=0.8",
-    "pymdown-extensions>=10.14",
-]
-
 [tool.setuptools.packages.find]
 include = ["pymcp*"]
 exclude = ["company*"]

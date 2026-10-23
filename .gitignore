@@ -12,5 +12,7 @@ explore
 .tox/
 py_sse_mcp.egg-info/
 plan.md
-# MkDocs build output
-site/
+# Docs site (VitePress)
+node_modules/
+docs/.vitepress/cache/
+docs/.vitepress/dist/

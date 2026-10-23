@@ -105,4 +105,4 @@ Security is configured through the same middleware entry point:
 - `require_authn`: reject unauthenticated requests with `401`
 - `auth_exempt_paths`: skip auth middleware on specific HTTP paths
 
-See [Security](./security.md) for concrete examples.
+See [Security](/security/) for concrete examples.

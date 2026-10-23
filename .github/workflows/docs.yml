@@ -5,15 +5,15 @@ on:
     branches: [main, master]
     paths:
       - "docs/**"
-      - "mkdocs.yml"
-      - "pyproject.toml"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/docs.yml"
   pull_request:
     branches: [main, master]
     paths:
       - "docs/**"
-      - "mkdocs.yml"
-      - "pyproject.toml"
+      - "package.json"
+      - "package-lock.json"
       - ".github/workflows/docs.yml"
   workflow_dispatch:
 
@@ -34,23 +34,20 @@ jobs:
       - name: Check out code
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0  # "Last updated" dates come from git history
 
-      - name: Set up Python
-        uses: actions/setup-python@v6
+      - uses: actions/setup-node@v4
         with:
-          python-version: "3.12"
+          node-version: 22
+          cache: npm
 
-      - name: Install docs dependencies
-        run: |
-          python -m pip install --upgrade pip
-          pip install -e '.[docs]'
+      - run: npm ci
 
-      - name: Build documentation
-        run: mkdocs build --strict
+      - name: Build docs (fails on dead links)
+        run: npm run docs:build
 
       - name: Package site
-        run: tar -czf "$RUNNER_TEMP/docs-site.tgz" -C site .
+        run: tar -czf "$RUNNER_TEMP/docs-site.tgz" -C docs/.vitepress/dist .
 
       - name: Upload site
         uses: actions/upload-artifact@v4
@@ -74,7 +71,7 @@ jobs:
             const body = `${marker}
             ## Documentation Build
 
-            The docs site built successfully (\`mkdocs build --strict\`) for this pull request.
+            The docs site built successfully (\`npm run docs:build\`, dead links fail the build) for this pull request.
 
             The published site at https://${process.env.SITE_HOST}/ updates after merge to \`main\` or \`master\`.`;
 
@@ -140,6 +137,9 @@ jobs:
             "https://$SITE_HOST/_deployment.json" |
             python3 -c 'import json,os,sys; assert json.load(sys.stdin)["revision"] == os.environ["GITHUB_SHA"]'
           curl --fail --silent --show-error "https://$SITE_HOST/" -o /dev/null
+          for page in getting-started tasks security middleware runtime-surface; do
+            curl --fail --silent --show-error "https://$SITE_HOST/$page/" -o /dev/null
+          done
       - name: Remove temporary credentials
         if: always()
         run: rm -f "$HOME/.ssh/docs-deploy"
